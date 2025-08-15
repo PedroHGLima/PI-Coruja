@@ -94,7 +94,6 @@ def evaluate_models_cv(models: dict, base_dir: Path) -> dict:
         mean_auc = np.mean(aucs_per_fold)
         std_auc = np.std(aucs_per_fold)
         std_tpr = np.std(tprs_per_fold, axis=0)
-        print(time_taken)
         
         results_data[model_name] = {
             'mean_fpr': mean_fpr,

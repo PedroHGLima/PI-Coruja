@@ -12,13 +12,8 @@ def main():
     """
     Baixa, filtra e exporta um subconjunto do dataset COCO-2017.
     """
-    print("--- Iniciando preparação do dataset de 10k imagens ---")
-    
-    print("Carregando o dataset COCO-2017 do FiftyOne Zoo...")
-    print("Nota: Isso pode demorar e consumir vários GBs na primeira vez.")
     dataset = foz.load_zoo_dataset("coco-2017", split="validation")
     dataset.persistent = True
-    print("Dataset carregado.")
 
     print(f"Filtrando {NUM_POSITIVOS} imagens com a classe 'person'...")
     positive_view = dataset.filter_labels("ground_truth", F("label") == "person")
@@ -27,8 +22,6 @@ def main():
     print(f"Filtrando {NUM_NEGATIVOS} imagens SEM a classe 'person'...")
     negative_view = dataset.exclude(positive_view)
     negative_subset = negative_view.take(NUM_NEGATIVOS)
-
-    print("\nIniciando a exportação das imagens para as pastas locais...")
     
     # Exporta imagens com humanos
     path_positivos = DATASET_DIR / "human"
@@ -47,8 +40,6 @@ def main():
         export_dir=str(path_negativos),
         dataset_type=fo.types.ImageDirectory()
     )
-
-    print("\nPreparação do dataset concluída com sucesso!")
 
 if __name__ == "__main__":
     main()
