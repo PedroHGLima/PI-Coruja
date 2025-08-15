@@ -71,8 +71,8 @@ Siga os passos abaixo para configurar e executar o projeto em seu ambiente local
 
 1.  **Clone o repositório:**
     ```bash
-    git clone [https://github.com/](https://github.com/)[SEU-USUARIO]/projeto-coruja.git
-    cd projeto-coruja
+    git clone https://github.com/PedroHGLima/PI-Coruja.git
+    cd PI-Coruja
     ```
 
 2.  **Crie e ative um ambiente virtual** (altamente recomendado):
