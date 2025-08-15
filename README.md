@@ -1,4 +1,4 @@
-# Projeto Coruja: Detector de Humanos para Otimização de Sistemas de Vigilância
+# Projeto Coruja: Sistema de Trigger para monitoramento e segurança
 
 ![Status](https://img.shields.io/badge/status-em%20desenvolvimento-yellow)
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
