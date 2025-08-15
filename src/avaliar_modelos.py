@@ -70,7 +70,7 @@ def evaluate_models_cv(models: dict, base_dir: Path) -> dict:
 
             # Realiza a predição apenas no conjunto de teste do fold atual
             start = time.time()
-            for img_path in tqdm(X_test, leave=False, desc=f"Predições {model_name}"):
+            for img_path in tqdm(X_test, leave=False, desc=f"Fold {fold+1}"):
                 max_confidence = 0.0
                 preds = model(img_path, verbose=False)
                 for box in preds[0].boxes:
