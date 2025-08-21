@@ -22,7 +22,6 @@ N_SPLITS = 5  # Número de folds para a validação cruzada
 
 # ... (a função load_models permanece a mesma) ...
 def load_models(names: list[str], models_path: Path) -> dict:
-    print(f"--- 1. Carregando modelos YOLO de '{models_path}' ---")
     models = {}
     for name in names:
         model_file = models_path / name
@@ -40,8 +39,6 @@ def evaluate_models_cv(models: dict, base_dir: Path) -> dict:
     """
     Executa a avaliação com validação cruzada estratificada (5-fold).
     """
-    print(f"--- 2. Executando avaliação com {N_SPLITS}-Fold Cross-Validation ---")
-    
     human_images = list((base_dir / "human").glob("*.jpg"))
     no_human_images = list((base_dir / "no_human").glob("*.jpg"))
     
@@ -53,8 +50,6 @@ def evaluate_models_cv(models: dict, base_dir: Path) -> dict:
 
     # Itera sobre cada modelo
     for model_name, model in models.items():
-        print(f"\n--- Avaliando o modelo: {model_name} ---")
-        
         tprs_per_fold = []
         aucs_per_fold = []
         time_taken = []
@@ -109,7 +104,6 @@ def evaluate_models_cv(models: dict, base_dir: Path) -> dict:
 
 def plot_roc_curves_cv(results: dict, output_filename: str = "roc_curves_cv.png"):
     """Gera o gráfico da Curva ROC média a partir dos resultados da validação cruzada."""
-    print(f"--- 3. Gerando gráfico ROC e salvando em '{output_filename}' ---")
     plt.figure(figsize=(12, 10))
 
     for model_name, data in results.items():
@@ -133,7 +127,6 @@ def plot_roc_curves_cv(results: dict, output_filename: str = "roc_curves_cv.png"
     
     plt.savefig(output_filename)
     plt.close()
-    print("Gráfico salvo com sucesso.")
 
 def main():
     """Função principal que orquestra a execução do script."""
@@ -144,7 +137,6 @@ def main():
     models = load_models(MODEL_NAMES, MODELS_DIR)
     results = evaluate_models_cv(models, DATASET_DIR)
     plot_roc_curves_cv(results, output_filename="../data/plots/roc_curves_cv.png")
-    print("\nProcesso finalizado.")
 
 if __name__ == "__main__":
     main()
