@@ -20,7 +20,7 @@ from sklearn.metrics import roc_auc_score, accuracy_score
 from tqdm import tqdm
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Treina uma CNN binária com ResNet18 e registra no MLflow")
     p.add_argument("--data-dir", default="../data/dataset_10k_train")
     p.add_argument("--models-dir", default="../models")
@@ -32,10 +32,13 @@ def parse_args():
     p.add_argument("--run-name", type=str, default=None)
     p.add_argument("--unfreeze-head", action="store_true", help="Descongelar últimas camadas para fine-tune")
     p.add_argument("--kfolds", type=int, default=5, help="Número de folds para validação cruzada (default=5)")
+    p.add_argument("--max-batches", type=int, default=100, help="Número máximo de batches por época (default=100)")
+    p.add_argument("--early-stop-patience", type=int, default=5, help="Número de épocas sem evolução mínima de acurácia para parar (default=5)")
+    p.add_argument("--early-stop-delta", type=float, default=0.01, help="Evolução mínima de acurácia para não parar (default=0.01 = 1%)")
     return p.parse_args()
 
 
-def get_transforms():
+def get_transforms() -> dict[str, transforms.Compose]:
     return {
         'train': transforms.Compose([
             transforms.RandomResizedCrop(224),
@@ -53,7 +56,7 @@ def get_transforms():
     }
 
 
-def get_image_paths_and_labels(data_dir):
+def get_image_paths_and_labels(data_dir: str) -> tuple[list[str], list[int], list[str]]:
     from pathlib import Path
     # ImageFolder: subpastas por classe
     data_dir = Path(data_dir)
@@ -67,24 +70,24 @@ def get_image_paths_and_labels(data_dir):
     return img_paths, labels, classes
 
 
-def build_model(device, unfreeze_head=False):
-    model = models.resnet18(weights='IMAGENET1K_V1')
-    for param in model.parameters():
-        param.requires_grad = False
 
-    if unfreeze_head:
-        # Ex: descongela a camada final e a penúltima bloco
-        for name, param in model.named_parameters():
-            if "layer4" in name or "fc" in name:
-                param.requires_grad = True
+class CorujaResNet(nn.Module):
+    def __init__(self, unfreeze_head: bool = False):
+        super().__init__()
+        self.base = models.resnet18(weights='IMAGENET1K_V1')
+        for param in self.base.parameters():
+            param.requires_grad = False
+        if unfreeze_head:
+            for name, param in self.base.named_parameters():
+                if "layer4" in name or "fc" in name:
+                    param.requires_grad = True
+        num_ftrs = self.base.fc.in_features
+        self.base.fc = nn.Linear(num_ftrs, 1)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.base(x)
 
-    num_ftrs = model.fc.in_features
-    model.fc = nn.Linear(num_ftrs, 1)
-    model = model.to(device)
-    return model
 
-
-def evaluate_epoch(model, dataloader, criterion, device):
+def evaluate_epoch(model: nn.Module, dataloader: torch.utils.data.DataLoader, criterion: nn.Module, device: torch.device) -> tuple[float, float, float]:
     model.eval()
     running_loss = 0.0
     all_probs = []
@@ -119,7 +122,7 @@ def evaluate_epoch(model, dataloader, criterion, device):
     return avg_loss, acc, auc
 
 
-def plot_and_log_roc_curve(labels, probs, output_path):
+def plot_and_log_roc_curve(labels: list[float], probs: list[float], output_path: str) -> bool:
     import matplotlib.pyplot as plt
     from sklearn.metrics import roc_curve, auc
     try:
@@ -147,7 +150,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, auc
 
-def train_kfold(args):
+def train_kfold(args: argparse.Namespace) -> tuple[float, float, float]:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     img_paths, labels, class_names = get_image_paths_and_labels(args.data_dir)
     img_paths = np.array(img_paths)
@@ -177,6 +180,8 @@ def train_kfold(args):
         best_fold_probs = None
         best_fold_labels = None
         for fold, (train_idx, val_idx) in enumerate(skf.split(img_paths, labels)):
+            val_acc_history = []
+            stop_counter = 0
             # Preparar datasets
             train_imgs = img_paths[train_idx]
             train_lbls = labels[train_idx]
@@ -184,13 +189,13 @@ def train_kfold(args):
             val_lbls = labels[val_idx]
             # Custom dataset
             class SimpleDataset(torch.utils.data.Dataset):
-                def __init__(self, img_paths, labels, transform):
+                def __init__(self, img_paths: list[str], labels: list[int], transform: transforms.Compose):
                     self.img_paths = img_paths
                     self.labels = labels
                     self.transform = transform
-                def __len__(self):
+                def __len__(self) -> int:
                     return len(self.img_paths)
-                def __getitem__(self, idx):
+                def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
                     img = Image.open(self.img_paths[idx]).convert('RGB')
                     img = self.transform(img)
                     label = self.labels[idx]
@@ -204,14 +209,17 @@ def train_kfold(args):
             train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=nw, pin_memory=pin_memory)
             val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, num_workers=nw, pin_memory=pin_memory)
             # Modelo
-            model = build_model(device, unfreeze_head=args.unfreeze_head)
+            model = CorujaResNet(unfreeze_head=args.unfreeze_head).to(device)
             params_to_optimize = [p for p in model.parameters() if p.requires_grad]
             optimizer = optim.Adam(params_to_optimize, lr=args.lr)
             criterion = nn.BCEWithLogitsLoss()
             # Treinamento
             for epoch in tqdm(range(args.epochs), desc=f"Fold {fold+1}", leave=True):
                 model.train()
+                batch_count = 0
                 for inputs, labels_batch in train_loader:
+                    if batch_count >= args.max_batches:
+                        break
                     inputs = inputs.to(device)
                     labels_batch = labels_batch.to(device).float().view(-1, 1)
                     optimizer.zero_grad()
@@ -219,6 +227,32 @@ def train_kfold(args):
                     loss = criterion(outputs, labels_batch)
                     loss.backward()
                     optimizer.step()
+                    batch_count += 1
+                # Avaliação por época
+                model.eval()
+                val_probs = []
+                val_true = []
+                with torch.no_grad():
+                    for inputs, labels_batch in val_loader:
+                        inputs = inputs.to(device)
+                        labels_batch = labels_batch.to(device).float().view(-1, 1)
+                        outputs = model(inputs)
+                        probs = torch.sigmoid(outputs).cpu().numpy().ravel()
+                        val_probs.extend(probs.tolist())
+                        val_true.extend(labels_batch.cpu().numpy().ravel().tolist())
+                # Calcular acurácia
+                val_preds = [1 if p > 0.5 else 0 for p in val_probs]
+                val_acc = accuracy_score(val_true, val_preds)
+                val_acc_history.append(val_acc)
+                # Early stopping: se não evoluir pelo menos delta por patience épocas
+                if len(val_acc_history) > 1:
+                    if val_acc < max(val_acc_history[:-1]) + args.early_stop_delta:
+                        stop_counter += 1
+                    else:
+                        stop_counter = 0
+                    if stop_counter >= args.early_stop_patience:
+                        print(f"Fold {fold+1}: Parando treinamento por estagnação de acurácia (val_acc={val_acc:.4f})")
+                        break
             # Avaliação
             model.eval()
             val_probs = []
