@@ -154,6 +154,14 @@ class CorujaTrainer:
             plt.fill_between(self.mean_fpr, mean_tpr - std_tpr, mean_tpr + std_tpr, color='blue', alpha=0.2, label='Desvio padrão')
             if best_fpr is not None and best_tpr is not None:
                 plt.plot(best_fpr, best_tpr, color='red', lw=2, linestyle='--', label=f'Melhor modelo ROC (AUC = {best_auc:.3f})')
+                # Encontrar FPR quando TPR ~ 0.98
+                tpr_array = np.array(best_tpr)
+                fpr_array = np.array(best_fpr)
+                idx_98 = np.argmin(np.abs(tpr_array - 0.98))
+                fpr_at_98 = fpr_array[idx_98]
+                tpr_at_98 = tpr_array[idx_98]
+                plt.scatter(fpr_at_98, tpr_at_98, color='black', zorder=5, label=f'FPR={fpr_at_98:.3f} @ TPR=0.98')
+                plt.annotate(f'FPR={fpr_at_98:.3f}', (fpr_at_98, tpr_at_98), textcoords="offset points", xytext=(10,-20), ha='center', color='black', fontsize=10, arrowprops=dict(arrowstyle='->', color='black'))
             plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle=':')
             plt.xlim([0.0, 1.0])
             plt.ylim([0.0, 1.05])
