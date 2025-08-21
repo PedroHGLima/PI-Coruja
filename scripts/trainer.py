@@ -42,10 +42,7 @@ class CorujaTrainer:
 
     def train_epoch(self, model, train_loader, optimizer, criterion):
         model.train()
-        batch_count = 0
         for inputs, labels_batch in train_loader:
-            if batch_count >= self.args.max_batches:
-                break
             inputs = inputs.to(self.device)
             labels_batch = labels_batch.to(self.device).float().view(-1, 1)
             optimizer.zero_grad()
@@ -53,7 +50,6 @@ class CorujaTrainer:
             loss = criterion(outputs, labels_batch)
             loss.backward()
             optimizer.step()
-            batch_count += 1
 
     def evaluate_epoch(self, model, val_loader):
         model.eval()
@@ -71,17 +67,6 @@ class CorujaTrainer:
         val_acc = accuracy_score(val_true, val_preds)
         return val_acc, val_preds, val_probs, val_true
 
-    def log_system_metrics(self, fold, epoch, val_acc, start_time):
-        cpu_percent = psutil.cpu_percent()
-        ram_percent = psutil.virtual_memory().percent
-        epoch_time = time.time() - start_time
-        mlflow.log_metrics({
-            f"fold{fold+1}_val_acc": val_acc,
-            f"fold{fold+1}_cpu_percent": cpu_percent,
-            f"fold{fold+1}_ram_percent": ram_percent,
-            f"fold{fold+1}_epoch_time": epoch_time,
-        }, step=epoch)
-
     def check_early_stopping(self, val_acc_history):
         if len(val_acc_history) > 1:
             if val_acc_history[-1] < max(val_acc_history[:-1]) + self.args.early_stop_delta:
@@ -91,7 +76,7 @@ class CorujaTrainer:
     def train_kfold(self):
         mlflow.set_tracking_uri(str(Path(self.args.data_dir).parent / "mlruns"))
         mlflow.set_experiment(self.args.experiment)
-        with mlflow.start_run(run_name=self.args.run_name):
+        with mlflow.start_run(run_name=self.args.run_name, log_system_metrics=True):
             mlflow.log_params({
                 'batch_size': self.args.batch_size,
                 'epochs': self.args.epochs,
@@ -123,7 +108,16 @@ class CorujaTrainer:
                     self.train_epoch(model, train_loader, optimizer, criterion)
                     val_acc, val_preds, val_probs, val_true = self.evaluate_epoch(model, val_loader)
                     val_acc_history.append(val_acc)
-                    self.log_system_metrics(fold, epoch, val_acc, start_time)
+                    # Calcular loss
+                    val_loss = nn.BCEWithLogitsLoss()(torch.tensor(val_probs).unsqueeze(1), torch.tensor(val_true).unsqueeze(1))
+                    # Calcular AUC
+                    try:
+                        val_auc = auc(*roc_curve(val_true, val_probs)[:2])
+                    except Exception:
+                        val_auc = float('nan')
+                    mlflow.log_metric(f"fold{fold+1}_val_acc", val_acc, step=epoch)
+                    mlflow.log_metric(f"fold{fold+1}_val_loss", val_loss.item(), step=epoch)
+                    mlflow.log_metric(f"fold{fold+1}_val_auc", val_auc, step=epoch)
                     if self.check_early_stopping(val_acc_history):
                         stop_counter += 1
                     else:
