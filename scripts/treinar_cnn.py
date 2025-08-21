@@ -9,6 +9,7 @@ import argparse
 import copy
 from pathlib import Path
 
+from PIL import Image
 import mlflow
 import torch
 import torch.nn as nn
@@ -176,7 +177,6 @@ def train_kfold(args):
         best_fold_probs = None
         best_fold_labels = None
         for fold, (train_idx, val_idx) in enumerate(skf.split(img_paths, labels)):
-            print(f"Fold {fold+1}/{args.kfolds}")
             # Preparar datasets
             train_imgs = img_paths[train_idx]
             train_lbls = labels[train_idx]
@@ -191,7 +191,6 @@ def train_kfold(args):
                 def __len__(self):
                     return len(self.img_paths)
                 def __getitem__(self, idx):
-                    from PIL import Image
                     img = Image.open(self.img_paths[idx]).convert('RGB')
                     img = self.transform(img)
                     label = self.labels[idx]
@@ -200,15 +199,17 @@ def train_kfold(args):
             train_ds = SimpleDataset(train_imgs, train_lbls, transforms_map['train'])
             val_ds = SimpleDataset(val_imgs, val_lbls, transforms_map['val'])
             pin_memory = True if device.type == 'cuda' else False
-            train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=pin_memory)
-            val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=pin_memory)
+            # Sugestão: para disco local, use num_workers=0 para evitar lentidão
+            nw = args.num_workers if args.num_workers is not None else 0
+            train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=nw, pin_memory=pin_memory)
+            val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, num_workers=nw, pin_memory=pin_memory)
             # Modelo
             model = build_model(device, unfreeze_head=args.unfreeze_head)
             params_to_optimize = [p for p in model.parameters() if p.requires_grad]
             optimizer = optim.Adam(params_to_optimize, lr=args.lr)
             criterion = nn.BCEWithLogitsLoss()
             # Treinamento
-            for epoch in range(args.epochs):
+            for epoch in tqdm(range(args.epochs), desc=f"Fold {fold+1}", leave=True):
                 model.train()
                 for inputs, labels_batch in train_loader:
                     inputs = inputs.to(device)
