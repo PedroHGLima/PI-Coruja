@@ -1,6 +1,5 @@
 import copy
 import time
-import psutil
 import numpy as np
 import torch
 import torch.nn as nn
