@@ -27,12 +27,13 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.debug:
-        args.epochs = 2
-        args.max_batches = 2
+        args.epochs = 5
+        args.max_batches = 5
         args.kfolds = 2
         args.batch_size = 8
-        args.data_dir = args.data_dir.replace('dataset_10k_train', 'dataset_10k_train_debug') if os.path.exists(args.data_dir.replace('dataset_10k_train', 'dataset_10k_train_debug')) else args.data_dir
-        print("[DEBUG] Modo rápido ativado: epochs=2, max_batches=2, kfolds=2, batch_size=8, data_dir=", args.data_dir)
+        debug_dataset = args.data_dir.replace('dataset_10k_train', 'dataset_10k_debug')
+        args.data_dir = debug_dataset if os.path.exists(debug_dataset) else args.data_dir
+        print("[DEBUG] Modo rápido ativado: epochs=5, max_batches=5, kfolds=2, batch_size=8, data_dir=", args.data_dir)
 
     trainer = CorujaTrainer(args)
     trainer.train_kfold()
