@@ -4,21 +4,8 @@ Script para treinar uma CNN classificadora binária (humano vs. não-humano)
 usando Transfer Learning com PyTorch e um modelo ResNet18 pré-treinado.
 """
 
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, random_split
-#!/usr/bin/env python3
-"""Treinamento de classificador binário (humano / não-humano) com ResNet18.
-
-Principais alterações:
-- Registro de parâmetros e métricas com MLflow (incluindo AUC).
-- Estrutura modular (carregamento de dados, treino, avaliação).
-- Pequenas otimizações: pin_memory apenas quando CUDA, cálculo de AUC na validação.
-"""
-
+import os
 import argparse
-import time
 import copy
 from pathlib import Path
 
@@ -26,8 +13,8 @@ import mlflow
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, random_split
-from torchvision import datasets, models, transforms
+from torch.utils.data import DataLoader
+from torchvision import models, transforms
 from sklearn.metrics import roc_auc_score, accuracy_score
 from tqdm import tqdm
 
@@ -67,7 +54,6 @@ def get_transforms():
 
 def get_image_paths_and_labels(data_dir):
     from pathlib import Path
-    import os
     # ImageFolder: subpastas por classe
     data_dir = Path(data_dir)
     classes = sorted([d.name for d in data_dir.iterdir() if d.is_dir()])
