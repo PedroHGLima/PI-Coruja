@@ -72,7 +72,6 @@ class CorujaTrainer:
         return False
 
     def train_kfold(self):
-        mlflow.set_tracking_uri(str(Path(self.args.data_dir).parent / "mlruns"))
         mlflow.set_experiment(self.args.experiment)
         with mlflow.start_run(run_name=self.args.run_name, log_system_metrics=True):
             mlflow.log_params({
