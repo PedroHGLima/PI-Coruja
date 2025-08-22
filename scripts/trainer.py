@@ -10,16 +10,15 @@ import mlflow
 import matplotlib.pyplot as plt
 from pathlib import Path
 from tqdm import tqdm
-from models import CorujaResNet
+from models import CorujaResNet, transforms_map
 from datasets import SimpleDataset, get_image_paths_and_labels
-from utils import get_transforms
 from sklearn.model_selection import StratifiedKFold
 
 class CorujaTrainer:
     def __init__(self, args):
         self.args = args
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.transforms_map = get_transforms()
+        self.transforms_map = transforms_map
         self.img_paths, self.labels, self.class_names = get_image_paths_and_labels(args.data_dir)
         self.img_paths = np.array(self.img_paths)
         self.labels = np.array(self.labels)
