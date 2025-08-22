@@ -21,7 +21,7 @@ def main() -> None:
     parser.add_argument("--unfreeze-head", action="store_true", help="Descongelar últimas camadas para fine-tune")
     parser.add_argument("--kfolds", type=int, default=5, help="Número de folds para validação cruzada (default=5)")
     parser.add_argument("--early-stop-patience", type=int, default=5, help="Número de épocas sem evolução mínima de acurácia para parar (default=5)")
-    parser.add_argument("--early-stop-delta", type=float, default=0.001, help="Evolução mínima de acurácia para não parar (default=0.001 = .1%)")
+    parser.add_argument("--early-stop-delta", type=float, default=0.001, help="Evolução mínima de acurácia para não parar (default=0.001 = .1%%)")
     parser.add_argument("--debug", action="store_true", help="Modo debug: treinamento rápido com poucos dados e épocas")
     args = parser.parse_args()
 
@@ -30,9 +30,10 @@ def main() -> None:
         args.max_batches = 5
         args.kfolds = 2
         args.batch_size = 8
+        args.run_name = "debug"
         debug_dataset = args.data_dir.replace('dataset_10k_train', 'dataset_10k_debug')
         args.data_dir = debug_dataset if os.path.exists(debug_dataset) else args.data_dir
-        print("[DEBUG] Modo rápido ativado: epochs=5, max_batches=5, kfolds=2, batch_size=8, data_dir=", args.data_dir)
+        print("[DEBUG] Modo rápido ativado: epochs=5, max_batches=5, kfolds=2, batch_size=8, run_name=debug, data_dir=", args.data_dir)
 
     trainer = CorujaTrainer(args)
     trainer.train_kfold()

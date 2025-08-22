@@ -94,7 +94,7 @@ class CorujaTrainer:
             best_tpr = None
             best_fold_probs = None
             best_fold_labels = None
-            for fold, (train_idx, val_idx) in enumerate(self.skf.split(self.img_paths, self.labels)):
+            for fold, (train_idx, val_idx) in enumerate(tqdm(list(self.skf.split(self.img_paths, self.labels)))):
                 val_acc_history = []
                 stop_counter = 0
                 train_loader, val_loader = self.get_dataloaders(train_idx, val_idx)
@@ -102,7 +102,7 @@ class CorujaTrainer:
                 params_to_optimize = [p for p in model.parameters() if p.requires_grad]
                 optimizer = optim.Adam(params_to_optimize, lr=self.args.lr)
                 criterion = nn.BCEWithLogitsLoss()
-                for epoch in tqdm(range(self.args.epochs), desc=f"Fold {fold+1}", leave=True):
+                for epoch in tqdm(range(self.args.epochs), desc=f"Fold {fold+1}", leave=False):
                     start_time = time.time()
                     self.train_epoch(model, train_loader, optimizer, criterion)
                     val_acc, val_preds, val_probs, val_true = self.evaluate_epoch(model, val_loader)
@@ -122,7 +122,7 @@ class CorujaTrainer:
                     else:
                         stop_counter = 0
                     if stop_counter >= self.args.early_stop_patience:
-                        print(f"Fold {fold+1}: Parando treinamento por estagnação de acurácia (val_acc={val_acc:.4f})")
+                        # print(f"Fold {fold+1}: Parando treinamento por estagnação de acurácia (val_acc={val_acc:.4f})")
                         break
                 # Avaliação final do fold
                 try:
@@ -132,7 +132,7 @@ class CorujaTrainer:
                     interp_tpr[0] = 0.0
                     tprs.append(interp_tpr)
                     aucs.append(fold_auc)
-                    print(f"Fold {fold+1} AUC: {fold_auc:.4f}")
+                    # print(f"Fold {fold+1} AUC: {fold_auc:.4f}")
                     if fold_auc > best_auc:
                         best_auc = fold_auc
                         best_wts = copy.deepcopy(model.state_dict())
@@ -174,7 +174,7 @@ class CorujaTrainer:
             plt.close()
             mlflow.log_artifact(str(roc_path))
             if best_wts is not None:
-                best_model_path = Path(self.args.models_dir) / "coruja_classifier_best.pth"
+                best_model_path = Path(self.args.models_dir) / (self.args.run_name+".pth" if self.args.run_name else "coruja_classifier_best.pth")
                 torch.save(best_wts, best_model_path)
                 mlflow.log_artifact(str(best_model_path))
             mlflow.log_metric('best_val_auc', best_auc)
