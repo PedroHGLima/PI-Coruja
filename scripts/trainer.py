@@ -174,8 +174,8 @@ class CorujaTrainer:
             plt.close()
             mlflow.log_artifact(str(roc_path))
             if best_wts is not None:
-                best_model_path = Path(self.args.models_dir) / (self.args.run_name+".pth" if self.args.run_name else "coruja_classifier_best.pth")
-                torch.save(best_wts, best_model_path)
+                best_model_path = Path(self.args.models_dir) / (self.args.run_name+".pt" if self.args.run_name else "coruja_classifier_best.pth")
+                torch.save(model, str(best_model_path))
                 mlflow.log_artifact(str(best_model_path))
             mlflow.log_metric('best_val_auc', best_auc)
             mlflow.log_metric('mean_val_auc', mean_auc)
