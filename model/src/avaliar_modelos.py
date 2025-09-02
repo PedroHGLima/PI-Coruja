@@ -136,7 +136,10 @@ def main():
         
     models = load_models(MODEL_NAMES, MODELS_DIR)
     results = evaluate_models_cv(models, DATASET_DIR)
-    plot_roc_curves_cv(results, output_filename="../data/plots/roc_curves_cv.png")
+    
+    output_path = Path("../data/plots/roc_curves_cv.png")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plot_roc_curves_cv(results, output_filename=output_path)
 
 if __name__ == "__main__":
     main()
