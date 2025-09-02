@@ -1,102 +1,81 @@
-# Projeto Coruja: Sistema de Trigger para monitoramento e segurança
+# PI-Coruja
 
-![Status](https://img.shields.io/badge/status-em%20desenvolvimento-yellow)
-![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green)
+Projeto de classificação binária de imagens (humano vs. não-humano) usando PyTorch, ResNet18 e MLflow.
 
-Um projeto de Visão Computacional desenvolvido para a disciplina de **Projeto Integrado**, com o objetivo de reduzir falsos positivos em sistemas de câmeras de segurança através da detecção de presença humana.
+## Passo a passo para começar
 
----
+1. **Clone o repositório:**
+   ```bash
+   git clone https://github.com/PedroHGLima/PI-Coruja.git
+   cd PI-Coruja
+   ```
+2. **Crie e ative o ambiente virtual:**
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+3. **Instale as dependências:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+5. **Execute o MLflow UI para visualizar experimentos:**
+   ```bash
+   mlflow ui --port 5000
+   ```
 
-## 📝 Índice
+## Estrutura do Projeto
+- `scripts/`: scripts de treinamento, avaliação e definição de modelos
+- `models/`: arquivos de pesos salvos (.pth ou .pt)
+- `data/`: datasets de treino, validação e imagens para teste
+- `notebooks/`: notebooks para inferência, visualização e análise
 
-- [Projeto Coruja: Detector de Humanos para Otimização de Sistemas de Vigilância](#projeto-coruja-detector-de-humanos-para-otimização-de-sistemas-de-vigilância)
-  - [📝 Índice](#-índice)
-  - [📖 Sobre o Projeto](#-sobre-o-projeto)
-  - [🎯 Funcionalidades](#-funcionalidades)
-  - [🛠️ Tecnologias Utilizadas](#️-tecnologias-utilizadas)
-  - [🚀 Começando](#-começando)
-    - [Pré-requisitos](#pré-requisitos)
-    - [Instalação](#instalação)
-  - [💡 Como Usar](#-como-usar)
+## Treinamento
+O treinamento é feito via `scripts/treinar_cnn.py`, que utiliza validação cruzada (K-Fold), early stopping e logging automático de métricas e artefatos no MLflow.
 
----
-
-## 📖 Sobre o Projeto
-
-Sistemas de vigilância equipados com sensores de movimento são notórios por gerar um alto volume de **falsos alarmes**, acionados por eventos irrelevantes como animais, sombras, mudanças de iluminação ou o vento balançando árvores. Este "ruído" acarreta dois problemas principais:
-
-1.  **Desgaste e Custo de Armazenamento:** Gravações desnecessárias ocupam um espaço valioso, reduzindo drasticamente a vida útil de mídias de armazenamento e gerando custos de substituição.
-2.  **Fadiga de Alerta:** Usuários que recebem notificações constantes e irrelevantes tendem a ignorar todos os alertas, diminuindo a eficácia do sistema de segurança.
-
-O **Projeto Coruja** atua como uma camada de vigilância inteligente. Como uma coruja que observa atentamente e só age quando necessário, o sistema analisa cada disparo do sensor de movimento. Ele captura um quadro do evento e, usando um modelo de detecção de objetos (YOLOv8), verifica se há uma presença humana. O alerta só é considerado válido — e a gravação iniciada — se uma pessoa for detectada.
-
-Essa validação inteligente visa filtrar o ruído e garantir que o sistema de armazenamento e a atenção do usuário sejam dedicados apenas a eventos verdadeiramente relevantes.
-
----
-
-## 🎯 Funcionalidades
-
--   **Detecção Precisa:** Identifica a presença de humanos em imagens com alta acurácia usando o modelo YOLOv8.
--   **Filtragem de Alertas:** Funciona como um classificador binário ("humano" / "não-humano") para validar gatilhos de movimento.
--   **Redução de Falsos Positivos:** Ignora movimentos causados por animais, objetos e outros eventos não-humanos.
--   **Otimização de Armazenamento:** Aumenta a vida útil de mídias de armazenamento ao salvar apenas vídeos relevantes.
-
----
-
-## 🛠️ Tecnologias Utilizadas
-
-O núcleo deste projeto foi construído com as seguintes tecnologias:
-
--   **Python 3.9+**
--   **PyTorch**
--   **Ultralytics (YOLOv8)**
--   **OpenCV-Python**
--   **Pillow (PIL)**
--   **NumPy**
-
----
-
-## 🚀 Começando
-
-Siga os passos abaixo para configurar e executar o projeto em seu ambiente local.
-
-### Pré-requisitos
-
--   Python 3.9 ou superior
--   PIP (gerenciador de pacotes do Python)
--   Git
-
-### Instalação
-
-1.  **Clone o repositório:**
-    ```bash
-    git clone https://github.com/PedroHGLima/PI-Coruja.git
-    cd PI-Coruja
-    ```
-
-2.  **Crie e ative um ambiente virtual** (altamente recomendado):
-    ```bash
-    # Cria o ambiente
-    python -m venv venv
-
-    # Ativa no Windows
-    .\venv\Scripts\activate
-
-    # Ativa no Linux/macOS
-    source venv/bin/activate
-    ```
-
-3.  **Instale as dependências:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
----
-
-## 💡 Como Usar
-
-Para analisar uma única imagem e verificar a presença de humanos, utilize o script principal na pasta `src`. O modelo YOLOv8 será baixado automaticamente na primeira execução.
-
+Exemplo de uso:
 ```bash
-python src/detector.py --imagem /caminho/completo/para/sua/imagem.jpg
+python3 scripts/treinar_cnn.py --data-dir data/dataset_10k_train --models-dir models --epochs 100 --batch-size 64 --experiment coruja_experiment --run-name teste
+```
+
+<!-- ## Avaliação
+O script `scripts/eval.py` permite avaliar o modelo em um dataset ou classificar imagens de um diretório arbitrário, mostrando predição e probabilidade. -->
+
+## Inferência e Visualização
+Notebooks em `notebooks/` permitem:
+- Carregar modelos salvos (.pth ou .pt)
+- Visualizar imagens, predição e certeza
+- Testar robustez do modelo com imagens modificadas (baixa resolução, preto e branco, distorcidas)
+
+## Como importar modelos
+- Para modelos salvos como `state_dict` (.pth):
+  ```python
+  from models import CorujaResNet
+  model = CorujaResNet()
+  model.load_state_dict(torch.load('models/modelo.pth'))
+  model.eval()
+  ```
+- Para modelos salvos inteiros (.pt):
+  ```python
+  model = torch.load('models/modelo.pt')
+  model.eval()
+  ```
+
+## Requisitos
+- Python 3.8+
+- PyTorch
+- torchvision
+- tqdm
+- scikit-learn
+- matplotlib
+- MLflow
+- torchinfo (para resumo do modelo)
+
+## Observações
+- Os scripts e notebooks funcionam tanto em CPU quanto GPU.
+- Para importar módulos locais em notebooks, adicione o diretório ao `sys.path`:
+  ```python
+  import sys
+  sys.path.append('../scripts')
+  from models import CorujaResNet
+  ```
+- O projeto está preparado para testes de robustez e visualização interativa.
