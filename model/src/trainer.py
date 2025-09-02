@@ -86,6 +86,7 @@ class CorujaTrainer:
             tprs = []
             aucs = []
             best_auc = 0.0
+            best_auc_fold = 0.0
             best_wts = None
             best_model_idx = -1
             best_fpr = None
@@ -115,6 +116,9 @@ class CorujaTrainer:
                     mlflow.log_metric(f"fold{fold+1}_val_acc", val_acc, step=epoch)
                     mlflow.log_metric(f"fold{fold+1}_val_loss", val_loss.item(), step=epoch)
                     mlflow.log_metric(f"fold{fold+1}_val_auc", val_auc, step=epoch)
+                    if val_auc > best_auc_fold:
+                        best_auc_fold = val_auc
+                        best_wts_fold = copy.deepcopy(model.state_dict())
                     if self.check_early_stopping(val_acc_history):
                         stop_counter += 1
                     else:
@@ -122,6 +126,7 @@ class CorujaTrainer:
                     if stop_counter >= self.args.early_stop_patience:
                         # print(f"Fold {fold+1}: Parando treinamento por estagnação de acurácia (val_acc={val_acc:.4f})")
                         break
+                model.load_state_dict(best_wts_fold)
                 # Avaliação final do fold
                 try:
                     fpr, tpr, _ = roc_curve(val_true, val_probs)
