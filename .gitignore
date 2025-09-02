@@ -1,8 +1,8 @@
 __pycache__/
 *.pyc
 .vscode/
-data/*
-models/*
+model/data/*
+model/models/*
 venv/
 *.pt
-scripts/mlruns/
+mlruns/
