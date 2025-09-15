@@ -56,7 +56,7 @@ def preparar_imagens(img_path:str, sections:int, debug:bool=False) -> torch.Tens
 
 def main(input_path:str, model_path:str, sections:int, debug:bool):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Avaliando a imagem {input_path} o modelo {model_path}")
+    print(f"Avaliando a imagem {input_path} com o modelo {model_path}")
 
     model = carregar_modelo(model_path, device)
     input_tensor = preparar_imagens(input_path, sections, debug).to(device)
