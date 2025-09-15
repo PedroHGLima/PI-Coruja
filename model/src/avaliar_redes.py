@@ -104,8 +104,7 @@ def main():
         start = time.time()
         output = classificar_imagem(
             img, coruja, device, sections).detach().cpu().numpy()
-        coruja_outputs[i] = (np.max(output) + 1) / \
-            2  # mapear tanh [-1,1] -> [0,1]
+        coruja_outputs[i] = (np.max(output) + 1) / 2  # mapear tanh [-1,1] -> [0,1]
         coruja_tempo[i] = time.time() - start
 
     # Inferir para cada referência YOLO separadamente (evita carregar vários por imagem)
