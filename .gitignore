@@ -6,3 +6,4 @@ model/models/*
 venv/
 *.pt
 mlruns/
+debug*
