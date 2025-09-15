@@ -16,7 +16,7 @@ class CorujaResNet(nn.Module):
         num_ftrs = self.base.fc.in_features
         self.base.fc = nn.Linear(num_ftrs, 1)
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.base(x)
+        return torch.tanh(self.base(x))
    
 transforms_map = {
     'train': transforms.Compose([
