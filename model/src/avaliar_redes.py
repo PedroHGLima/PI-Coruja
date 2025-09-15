@@ -138,12 +138,12 @@ def main():
     print("Resultados AUC:")
     for label, _, _, auc_val, f_mean, f_std in rocs:
         print(
-            f" - {label}: AUC={auc_val:.4f} | 1/T = {f_mean:.1f} \\pm {f_std:.1f} Hz")
+            f" - {label}: AUC={auc_val:.4f} | 1/T = {f_mean:.1f} ± {f_std:.1f} Hz")
 
     fig, ax = plt.subplots()
     for label, fpr, tpr, auc_val, f_mean, f_std in rocs:
         ax.plot(
-            fpr, tpr, label=f"{label.split('.')[0]} ($1/T = {f_mean:.1f} \\pm {f_std:.1f} Hz)$)")
+            fpr, tpr, label=f"{label.split('.')[0]} ($1/T = {f_mean:.1f} ± {f_std:.1f} Hz)$)")
     ax.plot([0, 1], [0, 1], 'k--')  # linha diagonal
     ax.set_xlabel('False Positive Rate')
     ax.set_ylabel('True Positive Rate')
