@@ -42,6 +42,7 @@ class CorujaTrainer:
         model.train()
         for inputs, labels_batch in train_loader:
             inputs = inputs.to(self.device)
+            # Labels já em {-1, 1}
             labels_batch = labels_batch.to(self.device).float().view(-1, 1)
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -58,10 +59,12 @@ class CorujaTrainer:
                 inputs = inputs.to(self.device)
                 labels_batch = labels_batch.to(self.device).float().view(-1, 1)
                 outputs = model(inputs)
-                probs = torch.sigmoid(outputs).cpu().numpy().ravel()
-                val_probs.extend(probs.tolist())
+                # Saída do modelo já está em [-1, 1] devido ao tanh
+                scores = outputs.cpu().numpy().ravel().tolist()
+                val_probs.extend(scores)
                 val_true.extend(labels_batch.cpu().numpy().ravel().tolist())
-        val_preds = [1 if p > 0.5 else 0 for p in val_probs]
+        # Converter para rótulos binários usando threshold 0
+        val_preds = [1 if p >= 0.0 else -1 for p in val_probs]
         val_acc = accuracy_score(val_true, val_preds)
         return val_acc, val_preds, val_probs, val_true
 
@@ -86,6 +89,7 @@ class CorujaTrainer:
             tprs = []
             aucs = []
             best_auc = 0.0
+            best_auc_fold = 0.0
             best_wts = None
             best_model_idx = -1
             best_fpr = None
@@ -99,22 +103,30 @@ class CorujaTrainer:
                 model = CorujaResNet(unfreeze_head=self.args.unfreeze_head).to(self.device)
                 params_to_optimize = [p for p in model.parameters() if p.requires_grad]
                 optimizer = optim.Adam(params_to_optimize, lr=self.args.lr)
-                criterion = nn.BCEWithLogitsLoss()
+                # Como os alvos estão em {-1,1} e a saída em tanh, usamos MSELoss
+                criterion = nn.MSELoss()
+                # Resetar controle do melhor dentro do fold
+                best_auc_fold = float('-inf')
+                best_wts_fold = copy.deepcopy(model.state_dict())
                 for epoch in tqdm(range(self.args.epochs), desc=f"Fold {fold+1}", leave=False):
                     start_time = time.time()
                     self.train_epoch(model, train_loader, optimizer, criterion)
                     val_acc, val_preds, val_probs, val_true = self.evaluate_epoch(model, val_loader)
                     val_acc_history.append(val_acc)
-                    # Calcular loss
-                    val_loss = nn.BCEWithLogitsLoss()(torch.tensor(val_probs).unsqueeze(1), torch.tensor(val_true).unsqueeze(1))
-                    # Calcular AUC
+                    # Calcular loss de validação em espaço [-1,1]
+                    val_loss = nn.MSELoss()(torch.tensor(val_probs).unsqueeze(1), torch.tensor(val_true).unsqueeze(1))
+                    # Calcular AUC em labels {-1,1} com pos_label=1
                     try:
-                        val_auc = auc(*roc_curve(val_true, val_probs)[:2])
+                        fpr_arr, tpr_arr, _ = roc_curve(val_true, val_probs, pos_label=1)
+                        val_auc = auc(fpr_arr, tpr_arr)
                     except Exception:
                         val_auc = float('nan')
                     mlflow.log_metric(f"fold{fold+1}_val_acc", val_acc, step=epoch)
                     mlflow.log_metric(f"fold{fold+1}_val_loss", val_loss.item(), step=epoch)
                     mlflow.log_metric(f"fold{fold+1}_val_auc", val_auc, step=epoch)
+                    if val_auc > best_auc_fold:
+                        best_auc_fold = val_auc
+                        best_wts_fold = copy.deepcopy(model.state_dict())
                     if self.check_early_stopping(val_acc_history):
                         stop_counter += 1
                     else:
@@ -122,9 +134,11 @@ class CorujaTrainer:
                     if stop_counter >= self.args.early_stop_patience:
                         # print(f"Fold {fold+1}: Parando treinamento por estagnação de acurácia (val_acc={val_acc:.4f})")
                         break
-                # Avaliação final do fold
+                model.load_state_dict(best_wts_fold)
+                # Avaliação final do fold usando os melhores pesos do fold
                 try:
-                    fpr, tpr, _ = roc_curve(val_true, val_probs)
+                    _, _, val_probs, val_true = self.evaluate_epoch(model, val_loader)
+                    fpr, tpr, _ = roc_curve(val_true, val_probs, pos_label=1)
                     fold_auc = auc(fpr, tpr)
                     interp_tpr = np.interp(self.mean_fpr, fpr, tpr)
                     interp_tpr[0] = 0.0
@@ -172,6 +186,8 @@ class CorujaTrainer:
             plt.close()
             mlflow.log_artifact(str(roc_path))
             if best_wts is not None:
+                # Garantir que salvamos os melhores pesos globais
+                model.load_state_dict(best_wts)
                 best_model_path = Path(self.args.models_dir) / (self.args.run_name+".pt" if self.args.run_name else "coruja_classifier_best.pt")
                 torch.save(model, str(best_model_path))
                 mlflow.log_artifact(str(best_model_path))

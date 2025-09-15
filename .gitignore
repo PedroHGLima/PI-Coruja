@@ -6,4 +6,5 @@ model/models/*
 venv/
 *.pt
 mlruns/
+debug*
 app/CorujaRecordings
