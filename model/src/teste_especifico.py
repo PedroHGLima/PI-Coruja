@@ -28,7 +28,7 @@ def carregar_modelo(model_path, device):
     model.eval()
     return model
 
-def preparar_imagens(img_path:str, sections:int, debug:bool):
+def preparar_imagens(img_path:str, sections:int, debug:bool=False) -> torch.Tensor:
     img = Image.open(img_path).convert("RGB")
     width, height = img.size
     tensors = []
@@ -51,9 +51,7 @@ def preparar_imagens(img_path:str, sections:int, debug:bool):
                 input_tensor = transforms_map['val'](img_section).unsqueeze(0)
                 tensors.append(input_tensor)
                 
-    tensors = torch.cat(tensors, dim=0)
-    
-    return tensors
+    return torch.cat(tensors, dim=0)
     
 
 def main(input_path:str, model_path:str, sections:int, debug:bool):
