@@ -7,3 +7,4 @@ venv/
 *.pt
 mlruns/
 debug*
+app/CorujaRecordings
