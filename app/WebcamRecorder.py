@@ -1,5 +1,4 @@
 import cv2
-import cv2
 import os
 import datetime
 import tkinter as tk

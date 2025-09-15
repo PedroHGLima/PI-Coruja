@@ -3,7 +3,7 @@ __pycache__/
 .vscode/
 model/data/*
 model/models/*
-venv/
+*env/
 *.pt
 mlruns/
 debug*
