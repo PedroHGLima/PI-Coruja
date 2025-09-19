@@ -8,8 +8,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Dependências úteis para instalar pacotes via pip (ajuste conforme necessário)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y \
     git \
+    ffmpeg \
+    libgl1 \
+    libglib2.0-0 \
+    vim \
     && rm -rf /var/lib/apt/lists/*
 
 # Copie o requirements.txt (ajuste o caminho se ele estiver fora deste diretório)
