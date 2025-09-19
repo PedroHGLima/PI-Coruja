@@ -1,5 +1,4 @@
 import copy
-import time
 import numpy as np
 import torch
 import torch.nn as nn
@@ -91,11 +90,8 @@ class CorujaTrainer:
             best_auc = 0.0
             best_auc_fold = 0.0
             best_wts = None
-            best_model_idx = -1
             best_fpr = None
             best_tpr = None
-            best_fold_probs = None
-            best_fold_labels = None
             for fold, (train_idx, val_idx) in enumerate(tqdm(list(self.skf.split(self.img_paths, self.labels)))):
                 val_acc_history = []
                 stop_counter = 0
@@ -109,7 +105,6 @@ class CorujaTrainer:
                 best_auc_fold = float('-inf')
                 best_wts_fold = copy.deepcopy(model.state_dict())
                 for epoch in tqdm(range(self.args.epochs), desc=f"Fold {fold+1}", leave=False):
-                    start_time = time.time()
                     self.train_epoch(model, train_loader, optimizer, criterion)
                     val_acc, val_preds, val_probs, val_true = self.evaluate_epoch(model, val_loader)
                     val_acc_history.append(val_acc)
@@ -148,11 +143,8 @@ class CorujaTrainer:
                     if fold_auc > best_auc:
                         best_auc = fold_auc
                         best_wts = copy.deepcopy(model.state_dict())
-                        best_model_idx = fold
                         best_fpr = fpr
                         best_tpr = tpr
-                        best_fold_probs = val_probs
-                        best_fold_labels = val_true
                 except Exception:
                     print(f"Fold {fold+1} não pôde calcular ROC/AUC.")
             # ROC média e std
