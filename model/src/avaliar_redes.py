@@ -27,7 +27,7 @@ def get_args():
     )
     parser.add_argument("--num_imgs", "-n", type=int, default=5_000,
                         help="Número máximo de imagens a serem avaliadas (balanceado entre classes).")
-    parser.add_argument("--sections", "-s", type=int, default=3,
+    parser.add_argument("--sections", "-s", type=int, default=1,
                         help="Número de seções para dividir a imagem.")
     parser.add_argument(
         "--output", "-o", "--outputs",
@@ -120,6 +120,7 @@ def main():
 
     for ref_path in reference_paths:
         yolo = YOLO(ref_path)
+        yolo_name = ref_path.split('/')[-1].split('.')[0]
         yolo_outputs = np.zeros(len(img_paths), dtype=np.float32)
         yolo_tempo = np.zeros(len(img_paths), dtype=float)
         for i, img in enumerate(tqdm(img_paths, desc=f"YOLO {ref_path}")):
@@ -132,7 +133,7 @@ def main():
             [1 if l == 1 else 0 for l in labels], yolo_outputs)
         auc_y = auc(fpr_y, tpr_y)
         yolo_freq = 1.0 / np.clip(yolo_tempo, 1e-12, None)
-        rocs.append((ref_path, fpr_y, tpr_y, auc_y, float(
+        rocs.append((yolo_name, fpr_y, tpr_y, auc_y, float(
             np.mean(yolo_freq)), float(np.std(yolo_freq))))
 
     print("Resultados AUC:")
@@ -143,7 +144,7 @@ def main():
     fig, ax = plt.subplots()
     for label, fpr, tpr, auc_val, f_mean, f_std in rocs:
         ax.plot(
-            fpr, tpr, label=f"{label.split('.')[0]} ($1/T = {f_mean:.1f} ± {f_std:.1f} Hz)$)")
+            fpr, tpr, label=f"{label} ($1/T = {f_mean:.1f} ± {f_std:.1f} Hz)$)")
     ax.plot([0, 1], [0, 1], 'k--')  # linha diagonal
     ax.set_xlabel('False Positive Rate')
     ax.set_ylabel('True Positive Rate')
