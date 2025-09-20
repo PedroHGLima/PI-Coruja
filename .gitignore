@@ -8,3 +8,4 @@ model/models/*
 mlruns/
 debug*
 app/CorujaRecordings
+*.out
