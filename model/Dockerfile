@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     libgl1 \
     libglib2.0-0 \
+    libcurl4-openssl-dev \
     vim \
     && rm -rf /var/lib/apt/lists/*
 
