@@ -9,7 +9,6 @@ import mlflow
 import matplotlib.pyplot as plt
 from pathlib import Path
 from tqdm import tqdm
-import os
 from models import CorujaResNet, transforms_map
 from datasets import SimpleDataset, get_image_paths_and_labels
 from sklearn.model_selection import StratifiedKFold
@@ -28,8 +27,8 @@ class CorujaTrainer:
         self.model_path = Path(self.args.models_dir) / (self.args.run_name+".pt" if self.args.run_name else "coruja_classifier_best.pt")
         
         # Validar start_at
-        if hasattr(args, 'start_at') and args.start_at > args.kfolds:
-            raise ValueError(f"start_at ({args.start_at}) não pode ser maior que kfolds ({args.kfolds})")
+        if hasattr(args, 'start_at') and (args.start_at > args.kfolds or args.start_at < 1):
+            raise ValueError(f"start_at ({args.start_at}) não pode ser maior que kfolds ({args.kfolds}) nem menor que 1")
         
         # print parameters
         print("Training parameters:")
