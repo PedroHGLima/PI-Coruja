@@ -27,7 +27,7 @@ def get_args():
     )
     parser.add_argument("--num_imgs", "-n", type=int, default=5_000,
                         help="Número máximo de imagens a serem avaliadas (balanceado entre classes).")
-    parser.add_argument("--sections", "-s", type=int, default=3,
+    parser.add_argument("--sections", "-s", type=int, default=1,
                         help="Número de seções para dividir a imagem.")
     parser.add_argument(
         "--output", "-o", "--outputs",

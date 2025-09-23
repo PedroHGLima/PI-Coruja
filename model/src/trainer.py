@@ -23,6 +23,20 @@ class CorujaTrainer:
         self.labels = np.array(self.labels)
         self.skf = StratifiedKFold(n_splits=args.kfolds, shuffle=True, random_state=42)
         self.mean_fpr = np.linspace(0, 1, 100)
+        
+        self.model_path = Path(self.args.models_dir) / (self.args.run_name+".pt" if self.args.run_name else "coruja_classifier_best.pt")
+        
+        # Validar start_at
+        if hasattr(args, 'start_at') and (args.start_at > args.kfolds or args.start_at < 1):
+            raise ValueError(f"start_at ({args.start_at}) não pode ser maior que kfolds ({args.kfolds}) nem menor que 1")
+        
+        # print parameters
+        print("Training parameters:")
+        print(vars(args))
+        print("Salvando modelo em: ", str(self.model_path))
+        print(f"Using device: {self.device}")
+        if self.device.type == 'cuda':
+            print(f"GPU Name: {torch.cuda.get_device_name(0)}")
 
     def get_dataloaders(self, train_idx, val_idx):
         train_imgs = self.img_paths[train_idx]
@@ -36,6 +50,16 @@ class CorujaTrainer:
         train_loader = DataLoader(train_ds, batch_size=self.args.batch_size, shuffle=True, num_workers=nw, pin_memory=pin_memory)
         val_loader = DataLoader(val_ds, batch_size=self.args.batch_size, shuffle=False, num_workers=nw, pin_memory=pin_memory)
         return train_loader, val_loader
+
+    def get_val_dataloader(self, val_idx):
+        """Cria apenas o dataloader de validação"""
+        val_imgs = self.img_paths[val_idx]
+        val_lbls = self.labels[val_idx]
+        val_ds = SimpleDataset(val_imgs, val_lbls, self.transforms_map['val'])
+        pin_memory = True if self.device.type == 'cuda' else False
+        nw = self.args.num_workers if self.args.num_workers is not None else 0
+        val_loader = DataLoader(val_ds, batch_size=self.args.batch_size, shuffle=False, num_workers=nw, pin_memory=pin_memory)
+        return val_loader
 
     def train_epoch(self, model, train_loader, optimizer, criterion):
         model.train()
@@ -90,8 +114,11 @@ class CorujaTrainer:
             best_auc = 0.0
             best_auc_fold = 0.0
             best_wts = None
+            best_model_idx = -1
             best_fpr = None
             best_tpr = None
+            best_fold_probs = None
+            best_fold_labels = None
             for fold, (train_idx, val_idx) in enumerate(tqdm(list(self.skf.split(self.img_paths, self.labels)))):
                 val_acc_history = []
                 stop_counter = 0
@@ -105,6 +132,7 @@ class CorujaTrainer:
                 best_auc_fold = float('-inf')
                 best_wts_fold = copy.deepcopy(model.state_dict())
                 for epoch in tqdm(range(self.args.epochs), desc=f"Fold {fold+1}", leave=False):
+                    start_time = time.time()
                     self.train_epoch(model, train_loader, optimizer, criterion)
                     val_acc, val_preds, val_probs, val_true = self.evaluate_epoch(model, val_loader)
                     val_acc_history.append(val_acc)
@@ -143,8 +171,11 @@ class CorujaTrainer:
                     if fold_auc > best_auc:
                         best_auc = fold_auc
                         best_wts = copy.deepcopy(model.state_dict())
+                        best_model_idx = fold
                         best_fpr = fpr
                         best_tpr = tpr
+                        best_fold_probs = val_probs
+                        best_fold_labels = val_true
                 except Exception:
                     print(f"Fold {fold+1} não pôde calcular ROC/AUC.")
             # ROC média e std
@@ -177,12 +208,10 @@ class CorujaTrainer:
             plt.savefig(roc_path)
             plt.close()
             mlflow.log_artifact(str(roc_path))
-            if best_wts is not None:
+            if best_model is not None:
                 # Garantir que salvamos os melhores pesos globais
-                model.load_state_dict(best_wts)
-                best_model_path = Path(self.args.models_dir) / (self.args.run_name+".pt" if self.args.run_name else "coruja_classifier_best.pt")
-                torch.save(model, str(best_model_path))
-                mlflow.log_artifact(str(best_model_path))
+                torch.save(best_model, str(self.model_path))
+                mlflow.log_artifact(str(self.model_path))
             mlflow.log_metric('best_val_auc', best_auc)
             mlflow.log_metric('mean_val_auc', mean_auc)
             mlflow.log_metric('std_val_auc', std_auc)
