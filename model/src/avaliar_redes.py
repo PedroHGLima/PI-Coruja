@@ -92,12 +92,13 @@ def main():
 
     img_paths, labels = prepare_dataset(input_path, n_imgs)
 
+    # Preparar estruturas para resultados
+    rocs = []  # lista de tuplas (label, fpr, tpr, auc, freq_mean, freq_std)
+    
+    # Inferência Coruja
     coruja = carregar_modelo(model_path, device)
-    # Preparar estruturas
     coruja_outputs = np.zeros(len(img_paths), dtype=np.float32)
     coruja_tempo = np.zeros(len(img_paths), dtype=float)
-    yolo_outputs_map: dict[str, np.ndarray] = {}
-    yolo_tempos_map: dict[str, np.ndarray] = {}
 
     for i, img in enumerate(tqdm(img_paths, desc="Inferência Coruja")):
         # --- Modelo Coruja ---
@@ -107,32 +108,35 @@ def main():
         coruja_outputs[i] = (np.max(output) + 1) / 2  # mapear tanh [-1,1] -> [0,1]
         coruja_tempo[i] = time.time() - start
 
-    # Inferir para cada referência YOLO separadamente (evita carregar vários por imagem)
-    rocs = []  # lista de tuplas (label, fpr, tpr, auc, freq_mean, freq_std)
     # Curva da Coruja
     fpr_coruja, tpr_coruja, _ = roc_curve(
         [1 if l == 1 else 0 for l in labels], coruja_outputs)
     auc_coruja = auc(fpr_coruja, tpr_coruja)
     # Frequência por amostra: f = 1/T (Hz). Evitar divisão por zero.
-    coruja_freq = 1.0 / np.clip(coruja_tempo, 1e-12, None)
+    # Usar um valor mínimo mais realista (1ms = 0.001s)
+    coruja_freq = 1.0 / np.clip(coruja_tempo, 0.01, None)
     rocs.append(("Coruja", fpr_coruja, tpr_coruja, auc_coruja,
-                 float(np.mean(coruja_freq)), float(np.std(coruja_freq))))
+             float(np.mean(coruja_freq)), float(np.std(coruja_freq))))
 
+    # inferência dos YOLOs
     for ref_path in reference_paths:
-        yolo = YOLO(ref_path)
-        yolo_name = ref_path.split('/')[-1].split('.')[0]
+        try:
+            yolo = YOLO(ref_path)
+        except FileNotFoundError as e:
+            print(f"Erro ao carregar YOLO {ref_path}: {e}")
+            continue
+        yolo_name = ref_path.split("/")[-1].split(".")[0]
         yolo_outputs = np.zeros(len(img_paths), dtype=np.float32)
         yolo_tempo = np.zeros(len(img_paths), dtype=float)
         for i, img in enumerate(tqdm(img_paths, desc=f"YOLO {ref_path}")):
             start = time.time()
             yolo_outputs[i] = ref_classificar(img, yolo)
             yolo_tempo[i] = time.time() - start
-        yolo_outputs_map[ref_path] = yolo_outputs
-        yolo_tempos_map[ref_path] = yolo_tempo
         fpr_y, tpr_y, _ = roc_curve(
             [1 if l == 1 else 0 for l in labels], yolo_outputs)
         auc_y = auc(fpr_y, tpr_y)
-        yolo_freq = 1.0 / np.clip(yolo_tempo, 1e-12, None)
+        # Frequência por amostra: f = 1/T (Hz). Usar valor mínimo realista (1ms)
+        yolo_freq = 1.0 / np.clip(yolo_tempo, 0.01, None)
         rocs.append((yolo_name, fpr_y, tpr_y, auc_y, float(
             np.mean(yolo_freq)), float(np.std(yolo_freq))))
 
@@ -144,7 +148,7 @@ def main():
     fig, ax = plt.subplots()
     for label, fpr, tpr, auc_val, f_mean, f_std in rocs:
         ax.plot(
-            fpr, tpr, label=f"{label} $(f = {f_mean:.1f} ± {f_std:.1f} Hz)$")
+            fpr, tpr, label=f"{label.split('.')[0]} ($f = {f_mean:.1f} ± {f_std:.1f} Hz$)")
     ax.plot([0, 1], [0, 1], 'k--')  # linha diagonal
     ax.set_xlabel('False Positive Rate')
     ax.set_ylabel('True Positive Rate')
