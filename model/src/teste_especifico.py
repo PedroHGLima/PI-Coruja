@@ -10,7 +10,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Avaliar Modelos")
     parser.add_argument("--input", "-i", type=str, required=True, help="Caminho para a imagem de entrada")
     parser.add_argument("--model", "-m", type=str, required=True, help="Caminho para o modelo")
-    parser.add_argument("--sections", "-s", type=int, default=3, help="Número de seções para dividir a imagem")
+    parser.add_argument("--sections", "-s", type=int, default=1, help="Número de seções para dividir a imagem")
     parser.add_argument("--debug", "-d", action='store_true', help="Ativar modo debug")
     args = parser.parse_args()
     return args
@@ -69,7 +69,12 @@ def main(input_path:str, model_path:str, sections:int, debug:bool):
                     print(f"Seção {crop} ({w},{h}): {output[i]}")
                     i += 1
 
-        print(np.max(output))
+    saida = np.max(output)
+    classe = "Humano" if saida > 0.0 else "Não Humano"
+    certeza = (saida + 1.0) / 2.0 if saida > 0.0 else (1.0 - saida) / 2.0
+    
+    print(f"Classificação final: {classe}")
+    print(f"Certeza: {certeza:.2%}")
 
     return
 
