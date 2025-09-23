@@ -20,7 +20,7 @@ class CorujaResNet(nn.Module):
    
 transforms_map = {
     'train': transforms.Compose([
-        transforms.RandomResizedCrop(384, scale=(0.8, 1.0), ratio=(0.9, 1.1)),
+        transforms.RandomResizedCrop(512, scale=(0.8, 1.0), ratio=(0.9, 1.1)),
         transforms.RandomHorizontalFlip(),
         transforms.ColorJitter(0.2, 0.2, 0.2),
         transforms.ToTensor(),
@@ -28,8 +28,8 @@ transforms_map = {
                              [0.229, 0.224, 0.225])
     ]),
     'val': transforms.Compose([
-        transforms.Resize(400),
-        transforms.CenterCrop(384),
+        transforms.Resize(550),
+        transforms.CenterCrop(512),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406],
                              [0.229, 0.224, 0.225])
