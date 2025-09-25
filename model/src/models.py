@@ -8,11 +8,7 @@ class CorujaResNet(nn.Module):
         super().__init__()
         self.base = models.resnet50(weights='IMAGENET1K_V1')
         for param in self.base.parameters():
-            param.requires_grad = False
-        if unfreeze_head:
-            for name, param in self.base.named_parameters():
-                if "layer4" in name or "fc" in name:
-                    param.requires_grad = True
+            param.requires_grad = unfreeze_head
         num_ftrs = self.base.fc.in_features
         self.base.fc = nn.Linear(num_ftrs, 1)
     def forward(self, x: torch.Tensor) -> torch.Tensor:
