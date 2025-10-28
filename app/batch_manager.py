@@ -13,7 +13,7 @@ from detector import ModeloDetector
 class GerenciadorBatches:
     """Gerencia a captura de vídeo, processamento em batches e gravação"""
     
-    def __init__(self, detector, duracao_batch=10.0, batch_size=10, 
+    def __init__(self, detector, duracao_batch=10.0, frequencia_amostragem=1.0, 
                  pasta_gravacoes="CorujaRecordings", fps_gravacao=30,
                  frame_callback=None):
         """
@@ -22,17 +22,20 @@ class GerenciadorBatches:
         Args:
             detector: Instância de ModeloDetector
             duracao_batch: Duração de cada batch em segundos
-            batch_size: Número de frames para análise por batch
+            frequencia_amostragem: Frequência de amostragem em Hz (frames/segundo)
             pasta_gravacoes: Pasta onde salvar os vídeos
             fps_gravacao: FPS dos vídeos salvos
             frame_callback: Função callback(frame, status) para enviar frames para UI
         """
         self.detector = detector
         self.duracao_batch = duracao_batch
-        self.batch_size = batch_size
+        self.frequencia_amostragem = frequencia_amostragem
         self.pasta_gravacoes = pasta_gravacoes
         self.fps_gravacao = fps_gravacao
         self.frame_callback = frame_callback
+        
+        # Calcular batch_size baseado na frequência e duração
+        self._atualizar_batch_size()
         
         # Estado de gravação
         self.gravando = False
@@ -83,12 +86,19 @@ class GerenciadorBatches:
         
         print("Gerenciador de batches encerrado.")
     
-    def atualizar_parametros(self, duracao_batch=None, batch_size=None):
+    def _atualizar_batch_size(self):
+        """Calcula batch_size baseado em duracao_batch e frequencia_amostragem"""
+        self.batch_size = max(1, int(self.duracao_batch * self.frequencia_amostragem))
+    
+    def atualizar_parametros(self, duracao_batch=None, frequencia_amostragem=None):
         """Atualiza parâmetros dinamicamente"""
         if duracao_batch is not None:
             self.duracao_batch = duracao_batch
-        if batch_size is not None:
-            self.batch_size = batch_size
+        if frequencia_amostragem is not None:
+            self.frequencia_amostragem = frequencia_amostragem
+        
+        # Recalcular batch_size após qualquer atualização
+        self._atualizar_batch_size()
     
     def _run_capture_loop(self):
         """Loop principal de captura (roda em thread separada)"""
@@ -149,8 +159,13 @@ class GerenciadorBatches:
         num_frames = len(self.batch_frames)
         print(f"\n[Batch] Processando batch #{self.total_batches} com {num_frames} frames...")
         
+        # Usar batch_size já calculado (duracao_batch * frequencia_amostragem)
+        num_amostras = min(self.batch_size, num_frames)  # Não pode ser maior que frames disponíveis
+        
+        print(f"[Batch] Amostrando {num_amostras} frames a {self.frequencia_amostragem:.2f} Hz...")
+        
         # Amostrar frames para inferência
-        indices = np.linspace(0, num_frames-1, min(self.batch_size, num_frames), dtype=int)
+        indices = np.linspace(0, num_frames-1, num_amostras, dtype=int)
         frames_amostra = [self.batch_frames[i] for i in indices]
         
         # Fazer inferência

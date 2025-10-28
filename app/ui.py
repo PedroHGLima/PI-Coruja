@@ -46,7 +46,7 @@ class CorujaApp:
         """Cria todos os elementos da interface"""
         # Frame principal
         main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        main_frame.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
         
         # Canvas para vídeo
         self.canvas = tk.Canvas(main_frame, width=640, height=480, bg='black')
@@ -59,37 +59,48 @@ class CorujaApp:
         
         # Frame de controles
         controls_frame = ttk.LabelFrame(main_frame, text="Parâmetros", padding="10")
-        controls_frame.grid(row=2, column=0, columnspan=2, pady=10, sticky=(tk.W, tk.E))
+        controls_frame.grid(row=2, column=0, columnspan=2, pady=10, sticky=tk.W + tk.E)
         
         # Duração do batch
-        ttk.Label(controls_frame, text="Duração do Batch (s):").grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(controls_frame, text="Duração do Batch (s):").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.duracao_var = tk.DoubleVar(value=10.0)
         self.duracao_slider = ttk.Scale(controls_frame, from_=5.0, to=30.0, 
                                         variable=self.duracao_var, orient=tk.HORIZONTAL,
                                         command=self._atualizar_duracao)
-        self.duracao_slider.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=5)
-        self.duracao_value = ttk.Label(controls_frame, text="10.0")
-        self.duracao_value.grid(row=0, column=2)
+        self.duracao_slider.grid(row=0, column=1, sticky=tk.W + tk.E, padx=5)
+        self.duracao_entry = ttk.Entry(controls_frame, width=8)
+        self.duracao_entry.insert(0, "10.0")
+        self.duracao_entry.grid(row=0, column=2, padx=5)
+        self.duracao_entry.bind('<Return>', self._on_duracao_entry)
+        self.duracao_entry.bind('<FocusOut>', self._on_duracao_entry)
         
-        # Frames para análise por batch
-        ttk.Label(controls_frame, text="Frames para Análise:").grid(row=1, column=0, sticky=tk.W)
-        self.frames_var = tk.IntVar(value=10)
-        self.frames_slider = ttk.Scale(controls_frame, from_=5, to=30, 
-                                       variable=self.frames_var, orient=tk.HORIZONTAL,
-                                       command=self._atualizar_frames)
-        self.frames_slider.grid(row=1, column=1, sticky=(tk.W, tk.E), padx=5)
-        self.frames_value = ttk.Label(controls_frame, text="10")
-        self.frames_value.grid(row=1, column=2)
+        # Frequência de amostragem (escala logarítmica, limitada a 2 Hz)
+        ttk.Label(controls_frame, text="Frequência (Hz):").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.frequencia_var = tk.DoubleVar(value=0.0)  # 0 -> 10^0 = 1 Hz padrão
+        # Escala logarítmica: slider vai de -1 (0.1 Hz) a 0.301 (2 Hz)
+        # log10(2) ≈ 0.301
+        self.freq_slider = ttk.Scale(controls_frame, from_=-1.0, to=0.301, 
+                                       variable=self.frequencia_var, orient=tk.HORIZONTAL,
+                                       command=self._atualizar_frequencia)
+        self.freq_slider.grid(row=1, column=1, sticky=tk.W + tk.E, padx=5)
+        self.freq_entry = ttk.Entry(controls_frame, width=8)
+        self.freq_entry.insert(0, "1.0")
+        self.freq_entry.grid(row=1, column=2, padx=5)
+        self.freq_entry.bind('<Return>', self._on_freq_entry)
+        self.freq_entry.bind('<FocusOut>', self._on_freq_entry)
         
         # Limiar de decisão
-        ttk.Label(controls_frame, text="Limiar de Decisão:").grid(row=2, column=0, sticky=tk.W)
+        ttk.Label(controls_frame, text="Limiar de Decisão:").grid(row=2, column=0, sticky=tk.W, pady=5)
         self.limiar_var = tk.DoubleVar(value=0.0)
         self.limiar_slider = ttk.Scale(controls_frame, from_=-1.0, to=1.0, 
                                        variable=self.limiar_var, orient=tk.HORIZONTAL,
                                        command=self._atualizar_limiar)
-        self.limiar_slider.grid(row=2, column=1, sticky=(tk.W, tk.E), padx=5)
-        self.limiar_value = ttk.Label(controls_frame, text="0.00")
-        self.limiar_value.grid(row=2, column=2)
+        self.limiar_slider.grid(row=2, column=1, sticky=tk.W + tk.E, padx=5)
+        self.limiar_entry = ttk.Entry(controls_frame, width=8)
+        self.limiar_entry.insert(0, "0.00")
+        self.limiar_entry.grid(row=2, column=2, padx=5)
+        self.limiar_entry.bind('<Return>', self._on_limiar_entry)
+        self.limiar_entry.bind('<FocusOut>', self._on_limiar_entry)
         
         # Configurar colunas expansíveis
         controls_frame.columnconfigure(1, weight=1)
@@ -157,22 +168,93 @@ class CorujaApp:
         self.root.after(33, self._processar_frames_ui)  # ~30 FPS
     
     def _atualizar_duracao(self, valor):
-        """Callback para atualizar duração do batch"""
+        """Callback para atualizar duração do batch (via slider)"""
         valor_float = float(valor)
-        self.duracao_value.config(text=f"{valor_float:.1f}")
+        self.duracao_entry.delete(0, tk.END)
+        self.duracao_entry.insert(0, f"{valor_float:.1f}")
         self.gerenciador.atualizar_parametros(duracao_batch=valor_float)
     
-    def _atualizar_frames(self, valor):
-        """Callback para atualizar número de frames"""
-        valor_int = int(float(valor))
-        self.frames_value.config(text=str(valor_int))
-        self.gerenciador.atualizar_parametros(batch_size=valor_int)
+    def _on_duracao_entry(self, event=None):
+        """Callback quando usuário digita valor de duração"""
+        try:
+            valor = float(self.duracao_entry.get())
+            # Validar limites
+            if valor < 5.0:
+                valor = 5.0
+            elif valor > 30.0:
+                valor = 30.0
+            
+            self.duracao_var.set(valor)
+            self.duracao_entry.delete(0, tk.END)
+            self.duracao_entry.insert(0, f"{valor:.1f}")
+            self.gerenciador.atualizar_parametros(duracao_batch=valor)
+        except ValueError:
+            # Restaurar valor anterior
+            self.duracao_entry.delete(0, tk.END)
+            self.duracao_entry.insert(0, f"{self.duracao_var.get():.1f}")
+    
+    def _atualizar_frequencia(self, valor):
+        """Callback para atualizar frequência de amostragem (escala logarítmica via slider)"""
+        # Converter escala logarítmica: 10^valor
+        # -1 -> 10^(-1) = 0.1 Hz
+        #  0 -> 10^0 = 1.0 Hz
+        #  0.301 -> 10^0.301 ≈ 2.0 Hz
+        valor_log = float(valor)
+        frequencia_hz = 10 ** valor_log
+        
+        self.freq_entry.delete(0, tk.END)
+        self.freq_entry.insert(0, f"{frequencia_hz:.3f}")
+        self.gerenciador.atualizar_parametros(frequencia_amostragem=frequencia_hz)
+    
+    def _on_freq_entry(self, event=None):
+        """Callback quando usuário digita valor de frequência"""
+        try:
+            valor = float(self.freq_entry.get())
+            # Validar limites (0.1 Hz a 2.0 Hz)
+            if valor < 0.1:
+                valor = 0.1
+            elif valor > 2.0:
+                valor = 2.0
+            
+            # Converter para escala logarítmica para o slider
+            import math
+            valor_log = math.log10(valor)
+            self.frequencia_var.set(valor_log)
+            
+            self.freq_entry.delete(0, tk.END)
+            self.freq_entry.insert(0, f"{valor:.3f}")
+            self.gerenciador.atualizar_parametros(frequencia_amostragem=valor)
+        except ValueError:
+            # Restaurar valor anterior
+            freq_atual = 10 ** self.frequencia_var.get()
+            self.freq_entry.delete(0, tk.END)
+            self.freq_entry.insert(0, f"{freq_atual:.3f}")
     
     def _atualizar_limiar(self, valor):
-        """Callback para atualizar limiar de decisão"""
+        """Callback para atualizar limiar de decisão (via slider)"""
         valor_float = float(valor)
-        self.limiar_value.config(text=f"{valor_float:.2f}")
+        self.limiar_entry.delete(0, tk.END)
+        self.limiar_entry.insert(0, f"{valor_float:.2f}")
         self.detector.atualizar_limiar(valor_float)
+    
+    def _on_limiar_entry(self, event=None):
+        """Callback quando usuário digita valor de limiar"""
+        try:
+            valor = float(self.limiar_entry.get())
+            # Validar limites
+            if valor < -1.0:
+                valor = -1.0
+            elif valor > 1.0:
+                valor = 1.0
+            
+            self.limiar_var.set(valor)
+            self.limiar_entry.delete(0, tk.END)
+            self.limiar_entry.insert(0, f"{valor:.2f}")
+            self.detector.atualizar_limiar(valor)
+        except ValueError:
+            # Restaurar valor anterior
+            self.limiar_entry.delete(0, tk.END)
+            self.limiar_entry.insert(0, f"{self.limiar_var.get():.2f}")
     
     def _toggle_gravacao(self):
         """Inicia ou para a gravação"""

@@ -14,7 +14,7 @@ PASTA_GRAVACOES = "CorujaRecordings"
 
 # Parâmetros de detecção
 DEFAULT_DURACAO_BATCH = 10.0  # segundos
-DEFAULT_BATCH_SIZE = 10  # frames para análise
+DEFAULT_FREQUENCIA = 1.0  # Hz (frequência de amostragem)
 DEFAULT_LIMIAR = 0.0
 FPS_GRAVACAO = 30
 
@@ -35,7 +35,7 @@ def main():
     gerenciador = GerenciadorBatches(
         detector=detector,
         duracao_batch=DEFAULT_DURACAO_BATCH,
-        batch_size=DEFAULT_BATCH_SIZE,
+        frequencia_amostragem=DEFAULT_FREQUENCIA,
         pasta_gravacoes=PASTA_GRAVACOES,
         fps_gravacao=FPS_GRAVACAO
     )
