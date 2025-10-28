@@ -181,26 +181,18 @@ class RealTimeDetector():
 
             agora = time.time()
             
-            # 2. Lógica de Amostragem (1 frame por segundo)
             if agora >= proxima_amostra_time:
                 if not self.frame_queue.full():
-                    # IMPORTANTE: Copiamos o frame.
-                    # Se não copiarmos, a thread de inferência pode processar
-                    # um frame que já foi sobrescrito pelo próximo cap.read()
                     frame_copia = frame.copy()
                     self.frame_queue.put(frame_copia)
                 else:
-                    # A thread de inferência está sobrecarregada
-                    print("Aviso: Fila de inferência cheia. Pulando amostra.")
-                
-                # Agenda a próxima amostra
-                proxima_amostra_time = agora + SEGUNDOS_POR_AMOSTRA
+                    raise OverflowError("Aviso: Fila de inferência cheia. Pulando amostra.")
 
-            # 3. Obter o status atual (thread-safe)
+                proxima_amostra_time = agora + self.periodo_amostra
+
             with self.status_lock:
                 status_para_exibir = self.status_atual
             
-            # 4. Desenhar o status na tela
             cor = (0, 0, 255) if "Detectado" in status_para_exibir else (0, 255, 0)
             cv2.putText(
                 frame, 
@@ -212,24 +204,20 @@ class RealTimeDetector():
                 2 # Espessura
             )
             
-            # 5. Exibir o frame
             cv2.imshow(NOME_JANELA_CAMERA, frame)
 
-            # 6. Verificar encerramento (ESC ou fechar janela)
             key = cv2.waitKey(1) & 0xFF
             if key == 27: # Tecla ESC
                 break
             if cv2.getWindowProperty(NOME_JANELA_CAMERA, cv2.WND_PROP_VISIBLE) < 1:
                 break
         
-        # --- Loop encerrado ---
         self.stop()
         cap.release()
 
-# --- Ponto de Entrada Principal ---
 def main():
     if not solicitar_permissao_camera_gui():
-        return # Usuário negou a permissão
+        return
 
     try:
         detector = RealTimeDetector(CAMINHO_MODELO_ONNX)
