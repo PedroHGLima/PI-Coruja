@@ -9,7 +9,7 @@ from ui import CorujaApp
 
 
 # Configurações padrão
-MODELO_ONNX = "../model/models/teste.onnx"
+MODELO_ONNX = "../model/models/v61.onnx"
 PASTA_GRAVACOES = "CorujaRecordings"
 
 # Parâmetros de detecção
