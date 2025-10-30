@@ -4,6 +4,12 @@ from pathlib import Path
 from fiftyone import ViewField as F
 import argparse
 
+class_labels = {
+    "human": ["person"],
+    "animal": ["cat", "dog"],
+    "vehicle": ["car", "motorcycle", "bus"]
+}
+
 def parse_arguments():
     """
     Configura e analisa os argumentos da linha de comando.
@@ -55,37 +61,27 @@ def main():
     dataset = foz.load_zoo_dataset("coco-2017", split=args.split)
     dataset.persistent = True
 
-    print(f"Filtrando imagens com a classe 'person'...")
-    positive_view = dataset.filter_labels("ground_truth", F("label") == "person")
+    for classe in ["human", "animal", "vehicle"]:
+        path_positivos = dataset_dir / classe
+        path_positivos.mkdir(parents=True, exist_ok=True)
+        
+        positive_subset = dataset.filter_labels("ground_truth", F("label").is_in(class_labels[classe]))\
+            .take(args.num_positivos if args.num_positivos != -1 else dataset.count)
+        
+        print(f"Exportando {len(positive_subset)} imagens para '{path_positivos}'...")
+        positive_subset.export(
+            export_dir=str(path_positivos),
+            dataset_type=fo.types.ImageDirectory()
+        )  
     
-    if args.num_positivos == -1:
-        positive_subset = positive_view
-        print(f"Pegando TODAS as {len(positive_subset)} imagens com pessoas disponíveis.")
-    else:
-        positive_subset = positive_view.take(args.num_positivos)
-        print(f"Pegando {args.num_positivos} imagens com pessoas.")
-
-    print(f"Filtrando imagens SEM a classe 'person'...")
-    negative_view = dataset.exclude(positive_view)
+    # create a negative subset (images without any of the target classes) similarly to the creation of positive subsets
+    negative_subset = dataset\
+        .filter_labels("ground_truth", ~F("label").is_in(class_labels["human"]))\
+        .filter_labels("ground_truth", ~F("label").is_in(class_labels["animal"]))\
+        .filter_labels("ground_truth", ~F("label").is_in(class_labels["vehicle"]))\
+        .take(args.num_negativos if args.num_negativos != -1 else dataset.count)
     
-    if args.num_negativos == -1:
-        negative_subset = negative_view
-        print(f"Pegando TODAS as {len(negative_subset)} imagens sem pessoas disponíveis.")
-    else:
-        negative_subset = negative_view.take(args.num_negativos)
-        print(f"Pegando {args.num_negativos} imagens sem pessoas.")
-    
-    # Exporta imagens com humanos
-    path_positivos = dataset_dir / "human"
-    path_positivos.mkdir(parents=True, exist_ok=True)
-    print(f"Exportando {len(positive_subset)} imagens para '{path_positivos}'...")
-    positive_subset.export(
-        export_dir=str(path_positivos),
-        dataset_type=fo.types.ImageDirectory()
-    )
-
-    # Exporta imagens sem humanos
-    path_negativos = dataset_dir / "no_human"
+    path_negativos = dataset_dir / "negatives"
     path_negativos.mkdir(parents=True, exist_ok=True)
     print(f"Exportando {len(negative_subset)} imagens para '{path_negativos}'...")
     negative_subset.export(
