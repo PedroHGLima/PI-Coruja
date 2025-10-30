@@ -57,24 +57,56 @@ def preparar_imagens(img_path:str, sections:int, debug:bool=False) -> torch.Tens
 def main(input_path:str, model_path:str, sections:int, debug:bool):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Avaliando a imagem {input_path} com o modelo {model_path}")
+    print(f"Device: {device}")
 
+    # Classes do modelo multi-label
+    class_names = ['human', 'animal', 'vehicle']
+    
     model = carregar_modelo(model_path, device)
     input_tensor = preparar_imagens(input_path, sections, debug).to(device)
-    with torch.no_grad():
-        output = model(input_tensor).detach().cpu().numpy()
-        i = 0
-        for crop in range(1, sections + 1):
-            for w in range(crop):
-                for h in range(crop):
-                    print(f"Seção {crop} ({w},{h}): {output[i]}")
-                    i += 1
-
-    saida = np.max(output)
-    classe = "Humano" if saida > 0.0 else "Não Humano"
-    certeza = (saida + 1.0) / 2.0 if saida > 0.0 else (1.0 - saida) / 2.0
     
-    print(f"Classificação final: {classe}")
-    print(f"Certeza: {certeza:.2%}")
+    with torch.no_grad():
+        # Output shape: [num_sections, 3] com valores tanh em [-1, 1]
+        output = model(input_tensor).detach().cpu().numpy()
+        
+        if debug:
+            i = 0
+            print("\n--- Saídas por seção (tanh [-1, 1]) ---")
+            for crop in range(1, sections + 1):
+                for w in range(crop):
+                    for h in range(crop):
+                        print(f"Seção {crop} ({w},{h}): {output[i]}")
+                        i += 1
+        
+        # Agrega as seções pegando o máximo para cada classe
+        # Shape: [3] - uma pontuação por classe
+        max_scores = np.max(output, axis=0)  # max de cada coluna (classe)
+        
+        # Converte tanh [-1, 1] para probabilidades [0, 1] usando sigmoid
+        # sigmoid(tanh(x)) é aproximadamente (tanh(x) + 1) / 2
+        probs = (max_scores + 1.0) / 2.0
+        
+        # Threshold para decisão binária (ajustável)
+        threshold = 0.5
+        predictions = (probs >= threshold).astype(int)
+    
+    print("\n" + "="*60)
+    print("CLASSIFICAÇÃO MULTI-LABEL")
+    print("="*60)
+    
+    detected_classes = []
+    for i, class_name in enumerate(class_names):
+        status = "✓ SIM" if predictions[i] == 1 else "✗ NÃO"
+        print(f"{class_name.capitalize():10s}: {probs[i]:.2%} {status}")
+        if predictions[i] == 1:
+            detected_classes.append(class_name)
+    
+    print("="*60)
+    if detected_classes:
+        print(f"Classes detectadas: {', '.join(detected_classes)}")
+    else:
+        print("Nenhuma classe detectada (imagem negativa)")
+    print("="*60)
 
     return
 
