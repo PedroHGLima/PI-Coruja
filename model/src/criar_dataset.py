@@ -215,7 +215,8 @@ def collect_negative_images(dataset, args, images_dir, images_data, total_image_
     """
     negative_counter = 0
     
-    if args.num_negativos <= 0:
+    # Se num_negativos é 0, não coleta nenhuma imagem negativa
+    if args.num_negativos == 0:
         return total_image_counter, negative_counter
     
     print(f"\nColetando até {args.num_negativos} imagens negativas...")
