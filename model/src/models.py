@@ -3,6 +3,13 @@ import torch.nn as nn
 from torchvision import models
 from torchvision import transforms
 
+# humanos, animais, veículos
+classes = {
+    (0): 'humanos',
+    (1, 2, 3) : 'veiculos',
+    (15, 16): 'animais'
+}
+
 class CorujaResNet(nn.Module):
     def __init__(self, unfreeze_head: bool = False):
         super().__init__()
@@ -10,7 +17,9 @@ class CorujaResNet(nn.Module):
         for param in self.base.parameters():
             param.requires_grad = unfreeze_head
         num_ftrs = self.base.fc.in_features
-        self.base.fc = nn.Linear(num_ftrs, 1)
+        self.base.fc = nn.Linear(num_ftrs, 3)
+        
+        
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.tanh(self.base(x))
    
