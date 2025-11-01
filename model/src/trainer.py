@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import mlflow
 import numpy as np
 import torch
 import torch.nn as nn
@@ -18,6 +17,12 @@ from tqdm import tqdm
 
 from models import CorujaResNet, transforms_map
 from datasets import SimpleDataset, get_image_paths_and_labels
+
+try:
+    import mlflow
+    MLFLOW_AVAILABLE = True
+except ImportError:
+    MLFLOW_AVAILABLE = False
 
 
 logging.basicConfig(level=logging.INFO,
@@ -96,6 +101,9 @@ class CorujaTrainer:
         logging.info(f"Device: {self.device}")
         if self.device.type == "cuda":
             logging.info(f"GPU: {torch.cuda.get_device_name(0)}")
+        
+        if not MLFLOW_AVAILABLE:
+            logging.warning("MLflow não está disponível. Treinamento continuará sem logging no MLflow.")
 
     # ------------------------
     # Utils
@@ -280,14 +288,15 @@ class CorujaTrainer:
             # Calcula F1 por classe
             f1_per_class = f1_score(val_true, val_preds, average=None, zero_division=0)
 
-            mlflow.log_metrics({
-                f"fold{fold+1}_val_hamming_acc": float(val_hamming_acc),
-                f"fold{fold+1}_val_f1_macro": float(val_f1_macro),
-                f"fold{fold+1}_val_f1_micro": float(val_f1_micro),
-                f"fold{fold+1}_val_f1_human": float(f1_per_class[0]) if len(f1_per_class) > 0 else 0.0,
-                f"fold{fold+1}_val_f1_animal": float(f1_per_class[1]) if len(f1_per_class) > 1 else 0.0,
-                f"fold{fold+1}_val_f1_vehicle": float(f1_per_class[2]) if len(f1_per_class) > 2 else 0.0,
-            }, step=epoch)
+            if MLFLOW_AVAILABLE:
+                mlflow.log_metrics({
+                    f"fold{fold+1}_val_hamming_acc": float(val_hamming_acc),
+                    f"fold{fold+1}_val_f1_macro": float(val_f1_macro),
+                    f"fold{fold+1}_val_f1_micro": float(val_f1_micro),
+                    f"fold{fold+1}_val_f1_human": float(f1_per_class[0]) if len(f1_per_class) > 0 else 0.0,
+                    f"fold{fold+1}_val_f1_animal": float(f1_per_class[1]) if len(f1_per_class) > 1 else 0.0,
+                    f"fold{fold+1}_val_f1_vehicle": float(f1_per_class[2]) if len(f1_per_class) > 2 else 0.0,
+                }, step=epoch)
             
             if not self.use_tqdm:
                 logging.info(
@@ -332,7 +341,8 @@ class CorujaTrainer:
         fold_dir.mkdir(parents=True, exist_ok=True)
         fold_model_path = fold_dir / "model.pth"
         torch.save(model.state_dict(), fold_model_path)
-        mlflow.log_artifact(str(fold_model_path))
+        if MLFLOW_AVAILABLE:
+            mlflow.log_artifact(str(fold_model_path))
         
         # Salva métricas do fold
         fold_metrics = {
@@ -343,7 +353,8 @@ class CorujaTrainer:
         fold_metrics_path = fold_dir / "metrics.json"
         with open(fold_metrics_path, 'w') as f:
             json.dump(fold_metrics, f, indent=2)
-        mlflow.log_artifact(str(fold_metrics_path))
+        if MLFLOW_AVAILABLE:
+            mlflow.log_artifact(str(fold_metrics_path))
 
         return model, aucs_per_class, fprs_per_class, tprs_per_class, final_f1_macro
 
@@ -352,8 +363,9 @@ class CorujaTrainer:
     # ------------------------
     def train_kfold(self):
         """Treina o modelo com validação cruzada k-fold (multi-label)"""
-        mlflow.set_experiment(self.args.experiment)
-        with mlflow.start_run(run_name=self.args.run_name, log_system_metrics=True):
+        if MLFLOW_AVAILABLE:
+            mlflow.set_experiment(self.args.experiment)
+            mlflow.start_run(run_name=self.args.run_name, log_system_metrics=True)
             mlflow.log_params(vars(self.args))
             mlflow.set_tags({
                 "model": "CorujaResNet",
@@ -361,6 +373,8 @@ class CorujaTrainer:
                 "num_classes": self.num_classes,
                 "classes": ', '.join(self.class_names)
             })
+        
+        try:
 
             all_f1_macros = []
             all_aucs_per_class = {class_name: [] for class_name in self.class_names}
@@ -482,12 +496,14 @@ class CorujaTrainer:
             roc_path = Path(self.args.models_dir) / "roc_kfold_multiclass.png"
             plt.savefig(roc_path, dpi=150)
             plt.close()
-            mlflow.log_artifact(str(roc_path))
+            if MLFLOW_AVAILABLE:
+                mlflow.log_artifact(str(roc_path))
 
             # Salva melhor modelo
             if best_model is not None:
                 torch.save(best_model, str(self.model_path))
-                mlflow.log_artifact(str(self.model_path))
+                if MLFLOW_AVAILABLE:
+                    mlflow.log_artifact(str(self.model_path))
                 logging.info(f"Melhor modelo salvo em: {self.model_path}")
 
             # Salva métricas consolidadas
@@ -509,16 +525,18 @@ class CorujaTrainer:
             metrics_path = Path(self.args.models_dir) / "kfold_metrics_summary.json"
             with open(metrics_path, "w") as f:
                 json.dump(metrics_summary, f, indent=2)
-            mlflow.log_artifact(str(metrics_path))
+            if MLFLOW_AVAILABLE:
+                mlflow.log_artifact(str(metrics_path))
 
             # Log métricas finais no MLflow
-            mlflow.log_metrics({
-                "best_f1_macro": float(best_f1_macro),
-                "mean_f1_macro": float(mean_f1_macro),
-                "std_f1_macro": float(std_f1_macro),
-                **{f"mean_auc_{class_name}": float(mean_aucs_per_class[class_name]) 
-                   for class_name in self.class_names}
-            })
+            if MLFLOW_AVAILABLE:
+                mlflow.log_metrics({
+                    "best_f1_macro": float(best_f1_macro),
+                    "mean_f1_macro": float(mean_f1_macro),
+                    "std_f1_macro": float(std_f1_macro),
+                    **{f"mean_auc_{class_name}": float(mean_aucs_per_class[class_name]) 
+                       for class_name in self.class_names}
+                })
 
             logging.info(f"\n{'='*60}")
             logging.info(f"Treinamento K-Fold concluído!")
@@ -528,5 +546,9 @@ class CorujaTrainer:
             logging.info(f"\nAUC por classe:")
             for class_name in self.class_names:
                 logging.info(f"  {class_name}: {mean_aucs_per_class[class_name]:.4f} ± {std_aucs_per_class[class_name]:.4f}")
+
+        finally:
+            if MLFLOW_AVAILABLE:
+                mlflow.end_run()
 
         return best_f1_macro, mean_f1_macro, std_f1_macro
