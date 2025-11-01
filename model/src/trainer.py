@@ -1,6 +1,7 @@
 import copy
 import logging
 import json
+import random
 import sys
 from pathlib import Path
 
@@ -23,6 +24,28 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s [%(levelname)s] %(message)s")
 
 
+def set_seed(seed: int = 42):
+    """
+    Configura todas as seeds para garantir reprodutibilidade.
+    
+    Args:
+        seed: Valor da seed (default=42)
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # Para multi-GPU
+    
+    # Configurações adicionais para garantir determinismo
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    
+    # Para operações do DataLoader
+    import os
+    os.environ['PYTHONHASHSEED'] = str(seed)
+
+
 class CorujaTrainer:
     """
     Classe responsável por treinar e avaliar uma CNN com k-fold cross-validation.
@@ -31,6 +54,12 @@ class CorujaTrainer:
 
     def __init__(self, args):
         self.args = args
+        
+        # Configurar seed para reprodutibilidade
+        seed = getattr(args, 'seed', 42)
+        set_seed(seed)
+        logging.info(f"Seed configurada: {seed}")
+        
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Detectar se stdout é terminal → controlar tqdm
@@ -44,7 +73,7 @@ class CorujaTrainer:
         # Para StratifiedKFold em multi-label, usamos a classe mais prevalente ou soma
         # Vamos usar uma estratégia simples: criar uma string única para cada combinação
         stratify_labels = [''.join(map(str, label)) for label in self.labels]
-        self.skf = StratifiedKFold(n_splits=args.kfolds, shuffle=True, random_state=42)
+        self.skf = StratifiedKFold(n_splits=args.kfolds, shuffle=True, random_state=seed)
         self.stratify_labels = np.array(stratify_labels)
         
         self.mean_fpr = np.linspace(0, 1, 100)
@@ -98,13 +127,14 @@ class CorujaTrainer:
         model.train()
         for inputs, batch_labels in train_loader:
             inputs = inputs.to(self.device)
-            batch_labels = batch_labels.to(self.device).float()  # Shape: [batch_size, 3]
+            batch_labels = batch_labels.to(self.device).float()  # Shape: [batch_size, 3], valores em [0, 1]
+            
+            # Converter labels de [0, 1] para [-1, 1] para compatibilidade com tanh
+            batch_labels_tanh = 2 * batch_labels - 1  # 0 -> -1, 1 -> 1
 
             optimizer.zero_grad()
-            outputs = model(inputs)  # Shape: [batch_size, 3], saída em tanh [-1, 1]
-            # Converte tanh [-1,1] para sigmoid [0,1] para BCELoss
-            probs = torch.sigmoid(outputs)
-            loss = criterion(probs, batch_labels)
+            outputs = model(inputs)  # Shape: [batch_size, 3], valores em [-1, 1] (tanh)
+            loss = criterion(outputs, batch_labels_tanh)
             loss.backward()
             optimizer.step()
 
@@ -122,12 +152,12 @@ class CorujaTrainer:
         with torch.no_grad():
             for inputs, batch_labels in val_loader:
                 inputs = inputs.to(self.device)
-                batch_labels = batch_labels.to(self.device).float()  # Shape: [batch_size, 3]
-                outputs = model(inputs)  # Shape: [batch_size, 3]
+                batch_labels = batch_labels.to(self.device).float()  # Shape: [batch_size, 3], valores em [0, 1]
+                outputs = model(inputs)  # Shape: [batch_size, 3], valores em [-1, 1] (tanh)
                 
-                # Para multi-label, aplicamos sigmoid nas saídas do tanh
-                # tanh: [-1, 1] -> sigmoid: [0, 1]
-                probs = torch.sigmoid(outputs)
+                # Converter tanh [-1, 1] para probabilidades [0, 1]
+                # tanh: -1 = ausente, +1 = presente
+                probs = (outputs + 1) / 2  # Mapeia [-1, 1] -> [0, 1]
                 
                 all_probs.extend(probs.cpu().numpy())
                 all_true.extend(batch_labels.cpu().numpy())
@@ -228,9 +258,8 @@ class CorujaTrainer:
         params_to_optimize = [p for p in model.parameters() if p.requires_grad]
         optimizer = optim.Adam(params_to_optimize, lr=self.args.lr)
         
-        # Multi-label: BCEWithLogitsLoss (já inclui sigmoid)
-        # Mas como nosso modelo usa tanh, vamos usar BCELoss após sigmoid
-        criterion = nn.BCELoss()
+        # Multi-label com tanh: MSELoss é apropriado para saída em [-1, 1]
+        criterion = nn.MSELoss()
 
         best_hamming_acc = float("-inf")
         best_f1_macro = float("-inf")
