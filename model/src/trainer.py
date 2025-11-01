@@ -378,21 +378,76 @@ class CorujaTrainer:
                 mean_aucs_per_class[class_name] = np.nanmean(aucs) if aucs else float("nan")
                 std_aucs_per_class[class_name] = np.nanstd(aucs) if aucs else float("nan")
 
-            # Plota curvas ROC por classe
-            fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+            # Plota curvas ROC de todas as classes no mesmo gráfico
+            fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+            
+            # Coleta todas as curvas ROC de todos os folds
+            all_tprs_per_class = {class_name: [] for class_name in self.class_names}
+            
+            # Re-calcular curvas ROC de todos os folds para plotagem
+            for fold in range(self.args.kfolds):
+                train_idx, val_idx = splits_list[fold]
+                fold_model_path = Path(self.args.models_dir) / f"fold_{fold+1}" / "model.pth"
+                
+                if fold_model_path.exists():
+                    try:
+                        state = torch.load(str(fold_model_path), map_location=self.device)
+                        model = CorujaResNet(unfreeze_head=self.args.unfreeze_head).to(self.device)
+                        model.load_state_dict(state)
+                        model.eval()
+                        
+                        val_loader = self.get_val_dataloader(val_idx)
+                        _, _, val_probs, val_true = self.evaluate_epoch(model, val_loader)
+                        
+                        for i, class_name in enumerate(self.class_names):
+                            try:
+                                fpr, tpr, _ = roc_curve(val_true[:, i], val_probs[:, i])
+                                # Interpolar TPR nos FPRs médios
+                                interp_tpr = np.interp(self.mean_fpr, fpr, tpr)
+                                interp_tpr[0] = 0.0
+                                all_tprs_per_class[class_name].append(interp_tpr)
+                            except:
+                                pass
+                    except Exception as e:
+                        logging.warning(f"Erro ao recarregar fold {fold+1} para plotagem: {e}")
+            
+            # Cores para cada classe
+            colors = {'human': '#1f77b4', 'animal': '#ff7f0e', 'vehicle': '#2ca02c'}
+            
             for idx, class_name in enumerate(self.class_names):
-                ax = axes[idx]
                 mean_auc = mean_aucs_per_class[class_name]
                 std_auc = std_aucs_per_class[class_name]
+                color = colors.get(class_name, f'C{idx}')
                 
-                ax.plot([0, 1], [0, 1], color="navy", lw=2, linestyle=":")
-                ax.set_xlim([0.0, 1.0])
-                ax.set_ylim([0.0, 1.05])
-                ax.set_xlabel("Taxa de Falsos Positivos (FPR)")
-                ax.set_ylabel("Taxa de Verdadeiros Positivos (TPR)")
-                ax.set_title(f"ROC - {class_name.capitalize()}\n(AUC = {mean_auc:.3f} ± {std_auc:.3f})")
-                ax.legend(loc="lower right")
-                ax.grid(True)
+                # Plota curvas individuais dos folds (opcional, comentado para não poluir)
+                tprs = all_tprs_per_class[class_name]
+                # for i, tpr in enumerate(tprs):
+                #     ax.plot(self.mean_fpr, tpr, lw=1, alpha=0.15, color=color)
+                
+                # Plota curva ROC média
+                if tprs:
+                    mean_tpr = np.mean(tprs, axis=0)
+                    mean_tpr[-1] = 1.0
+                    ax.plot(self.mean_fpr, mean_tpr, color=color, lw=2.5,
+                           label=f'{class_name.capitalize()} (AUC = {mean_auc:.3f} ± {std_auc:.3f})')
+                    
+                    # Adiciona área de desvio padrão
+                    std_tpr = np.std(tprs, axis=0)
+                    tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
+                    tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
+                    ax.fill_between(self.mean_fpr, tprs_lower, tprs_upper, 
+                                   color=color, alpha=0.15)
+            
+            # Plota linha diagonal de referência
+            ax.plot([0, 1], [0, 1], color="gray", lw=2, linestyle="--", label="Aleatório")
+            
+            ax.set_xlim([0.0, 1.0])
+            ax.set_ylim([0.0, 1.05])
+            ax.set_xlabel("Taxa de Falsos Positivos (FPR)", fontsize=12)
+            ax.set_ylabel("Taxa de Verdadeiros Positivos (TPR)", fontsize=12)
+            ax.set_title("Curvas ROC - Classificação Multi-label", fontsize=14, fontweight='bold')
+            ax.legend(loc="lower right", fontsize=10)
+            ax.grid(True, alpha=0.3)
             
             plt.tight_layout()
             roc_path = Path(self.args.models_dir) / "roc_kfold_multiclass.png"
