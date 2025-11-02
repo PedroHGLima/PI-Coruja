@@ -158,13 +158,11 @@ class CorujaTrainer:
             for inputs, batch_labels in val_loader:
                 inputs = inputs.to(self.device)
                 batch_labels = batch_labels.to(self.device).float()  # Shape: [batch_size, 3], valores em [0, 1]
-                outputs = model(inputs)  # Shape: [batch_size, 3], valores em [-1, 1] (tanh)
-                
-                # Converter tanh [-1, 1] para probabilidades [0, 1]
-                # tanh: -1 = ausente, +1 = presente
-                probs = (outputs + 1) / 2  # Mapeia [-1, 1] -> [0, 1]
-                
-                all_probs.extend(probs.cpu().numpy())
+                outputs = model(inputs)  # Shape: [batch_size, 3], valores em [0, 1] (sigmoid)
+
+                probs = outputs.detach().cpu().numpy()
+
+                all_probs.extend(probs)
                 all_true.extend(batch_labels.cpu().numpy())
         
         all_probs = np.array(all_probs)  # Shape: [n_samples, 3]
