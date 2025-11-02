@@ -14,7 +14,7 @@ class CorujaResNet(nn.Module):
     """
     ResNet50 para classificação multi-label de 3 classes.
     
-    Saída: Tensor de shape [batch_size, 3] com valores em [-1, 1] (tanh)
+    Saída: Tensor de shape [batch_size, 3] com valores em [0, 1] (sigmoid)
     - Índice 0: human (pessoa)
     - Índice 1: animal (gato, cachorro)
     - Índice 2: vehicle (carro, moto, ônibus)
@@ -26,7 +26,7 @@ class CorujaResNet(nn.Module):
             param.requires_grad = unfreeze_head
         num_ftrs = self.base.fc.in_features
         # 3 neurônios de saída para multi-label
-        self.base.fc = nn.Linear(num_ftrs, 3)
+        self.base.fc = nn.ReLU(num_ftrs, 3)
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -36,9 +36,9 @@ class CorujaResNet(nn.Module):
             x: Tensor de entrada [batch_size, 3, H, W]
         
         Returns:
-            Tensor [batch_size, 3] com valores em [-1, 1] (tanh)
+            Tensor [batch_size, 3] com valores em [0, 1] (sigmoid)
         """
-        return torch.tanh(self.base(x))
+        return torch.sigmoid(self.base(x))
    
 transforms_map = {
     'train': transforms.Compose([

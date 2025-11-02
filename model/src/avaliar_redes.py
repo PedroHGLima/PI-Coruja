@@ -1,6 +1,5 @@
 import time
 from ultralytics import YOLO
-from teste_especifico import preparar_imagens, carregar_modelo
 from datasets import get_image_paths_and_labels
 from tqdm import tqdm
 import torch
@@ -8,7 +7,10 @@ import numpy as np
 from sklearn.metrics import roc_curve, auc, f1_score, hamming_loss
 import matplotlib.pyplot as plt
 import argparse
+from PIL import Image
 
+from teste_especifico import carregar_modelo
+from models import transforms_map
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -29,8 +31,6 @@ def get_args():
     )
     parser.add_argument("--num_imgs", "-n", type=int, default=5_000,
                         help="Número máximo de imagens a serem avaliadas (0 = todas).")
-    parser.add_argument("--sections", "-s", type=int, default=2,
-                        help="Número de seções para dividir a imagem (1=inteira, 2=4 seções, etc).")
     parser.add_argument(
         "--output", "-o", "--outputs",
         nargs="+",
@@ -44,25 +44,21 @@ def get_args():
     return args
 
 
-def classificar_imagem(img_path: str, model: torch.nn.Module, device: torch.device, sections: int = 2) -> np.ndarray:
+def classificar_imagem(img_path: str, model: torch.nn.Module, device: torch.device) -> np.ndarray:
     """
     Classifica uma imagem usando o modelo Coruja multi-label.
     
     Returns:
         np.ndarray: Array [3] com probabilidades para [human, animal, vehicle]
     """
-    input_tensor = preparar_imagens(img_path, sections).to(device)
+    img = Image.open(img_path).convert("RGB")
+    input_tensor = transforms_map['val'](img).unsqueeze(0).to(device)
+    
     with torch.no_grad():
-        # Output: [num_sections, 3] com valores tanh [-1, 1]
+        # Output: [3] com valores sigmoid [0, 1]
         output = model(input_tensor).detach().cpu().numpy()
     
-    # Agrega seções pegando o máximo por classe
-    max_scores = np.max(output, axis=0)  # [3]
-    
-    # Converte tanh [-1, 1] para probabilidades [0, 1]
-    probs = (max_scores + 1.0) / 2.0
-    
-    return probs
+    return output
 
 
 def prepare_dataset(input_path: str, n_imgs: int) -> tuple[list[str], np.ndarray]:
@@ -141,7 +137,6 @@ def main():
     input_path = args.input
     model_path = args.model
     reference_paths = args.reference
-    sections = args.sections
     device = torch.device(args.device)
     output_paths = args.output
     n_imgs = args.num_imgs
@@ -149,7 +144,6 @@ def main():
     print(
         f"Avaliando dataset {input_path} com Coruja {model_path} e referências {', '.join(reference_paths)}")
     print(f"Número máximo de imagens: {n_imgs}")
-    print(f"Número de seções por imagem: {sections}")
     print(f"Arquivos de saída da ROC: {', '.join(output_paths)}")
     print(f"Usando dispositivo: {device}")
 
@@ -173,8 +167,8 @@ def main():
 
     for i, img in enumerate(tqdm(img_paths, desc="Inferência Coruja")):
         start = time.time()
-        output = classificar_imagem(img, coruja, device, sections)
-        coruja_outputs[i] = output  # Já está em [0, 1]
+        output = classificar_imagem(img, coruja, device)
+        coruja_outputs[i] = output
         coruja_tempo[i] = time.time() - start
 
     # Calcula métricas multi-label para Coruja

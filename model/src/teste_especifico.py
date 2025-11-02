@@ -66,12 +66,12 @@ def main(input_path:str, model_path:str, sections:int, debug:bool):
     input_tensor = preparar_imagens(input_path, sections, debug).to(device)
     
     with torch.no_grad():
-        # Output shape: [num_sections, 3] com valores tanh em [-1, 1]
+        # Output shape: [num_sections, 3] com valores sigmoid em [0, 1]
         output = model(input_tensor).detach().cpu().numpy()
         
         if debug:
             i = 0
-            print("\n--- Saídas por seção (tanh [-1, 1]) ---")
+            print("\n--- Saídas por seção (sigmoid [0, 1]) ---")
             for crop in range(1, sections + 1):
                 for w in range(crop):
                     for h in range(crop):
@@ -79,12 +79,8 @@ def main(input_path:str, model_path:str, sections:int, debug:bool):
                         i += 1
         
         # Agrega as seções pegando o máximo para cada classe
-        # Shape: [3] - uma pontuação por classe
-        max_scores = np.max(output, axis=0)  # max de cada coluna (classe)
-        
-        # Converte tanh [-1, 1] para probabilidades [0, 1] usando sigmoid
-        # sigmoid(tanh(x)) é aproximadamente (tanh(x) + 1) / 2
-        probs = (max_scores + 1.0) / 2.0
+        # Shape: [3] - uma probabilidade por classe
+        probs = np.max(output, axis=0)  # max de cada coluna (classe)
         
         # Threshold para decisão binária (ajustável)
         threshold = 0.5

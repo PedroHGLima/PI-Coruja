@@ -136,13 +136,10 @@ class CorujaTrainer:
         for inputs, batch_labels in train_loader:
             inputs = inputs.to(self.device)
             batch_labels = batch_labels.to(self.device).float()  # Shape: [batch_size, 3], valores em [0, 1]
-            
-            # Converter labels de [0, 1] para [-1, 1] para compatibilidade com tanh
-            batch_labels_tanh = 2 * batch_labels - 1  # 0 -> -1, 1 -> 1
 
             optimizer.zero_grad()
-            outputs = model(inputs)  # Shape: [batch_size, 3], valores em [-1, 1] (tanh)
-            loss = criterion(outputs, batch_labels_tanh)
+            outputs = model(inputs)  # Shape: [batch_size, 3], valores em [0, 1] (sigmoid)
+            loss = criterion(outputs, batch_labels)
             loss.backward()
             optimizer.step()
 
@@ -266,8 +263,8 @@ class CorujaTrainer:
         params_to_optimize = [p for p in model.parameters() if p.requires_grad]
         optimizer = optim.Adam(params_to_optimize, lr=self.args.lr)
         
-        # Multi-label com tanh: MSELoss é apropriado para saída em [-1, 1]
-        criterion = nn.MSELoss()
+        # Multi-label com sigmoid: BCELoss é apropriado para saída em [0, 1]
+        criterion = nn.BCELoss()
 
         best_hamming_acc = float("-inf")
         best_f1_macro = float("-inf")
