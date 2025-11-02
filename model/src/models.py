@@ -23,10 +23,16 @@ class CorujaResNet(nn.Module):
         super().__init__()
         self.base = models.resnet50(weights='IMAGENET1K_V1')
         for param in self.base.parameters():
-            param.requires_grad = unfreeze_head
+            param.requires_grad = False
+        if unfreeze_head:
+            for param in self.base.layer4.parameters():
+                param.requires_grad = True
+            for param in self.base.layer3.parameters():
+                param.requires_grad = True
+            
         num_ftrs = self.base.fc.in_features
         # 3 neurônios de saída para multi-label
-        self.base.fc = nn.ReLU(num_ftrs, 3)
+        self.base.fc = nn.Linear(num_ftrs, 3)
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
