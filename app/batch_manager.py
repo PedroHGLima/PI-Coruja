@@ -1,5 +1,3 @@
-
-    
 """
 Módulo de gerenciamento de batches - Captura, processamento e gravação
 Refatorado para arquitetura multi-thread (Produtor-Consumidor)
@@ -10,7 +8,6 @@ import os
 import time
 import threading
 import queue
-from detector import ModeloDetector
 
 
 class GerenciadorBatches:
