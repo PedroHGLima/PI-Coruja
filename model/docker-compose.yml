@@ -1,0 +1,20 @@
+services:
+  model:
+    image: pgraveli/coruja:ngc
+    container_name: coruja_model
+    stdin_open: true
+    tty: true
+    gpus: all
+    ipc: host
+    ulimits:
+      memlock: -1
+      stack: 134217728
+      nofile: 65536
+    volumes:
+      - ./:/app
+    working_dir: /app/src 
+    user: "${DOCKER_UID}:${DOCKER_GID}" 
+    
+    environment:
+      - PYTHONUNBUFFERED=1
+      - NVIDIA_VISIBLE_DEVICES=all

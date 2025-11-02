@@ -98,8 +98,8 @@ Argumentos principais:
 - `--debug`: reduz dados/épocas para iteração rápida.
 
 Detalhes de implementação úteis:
-- Arquitetura padrão em `models.py` (`CorujaResNet` sobre ResNet‑50) com saída `tanh` em `[-1, 1]`.
-- Alvos em `{−1, 1}` e loss `MSELoss` coerente com a saída `tanh`.
+- Arquitetura padrão em `models.py` (`CorujaResNet` sobre ResNet‑50) com saída `sigmoid` em `[0, 1]`.
+- Alvos em `{0, 1}` e loss `BCELoss` (ou `BCEWithLogitsLoss` se preferir trabalhar com logits) coerente com a saída `sigmoid`.
 - Métricas: ACC, AUC (ROC); melhor AUC por fold é acompanhado e salvo.
 - `transforms_map` define augmentations de treino e pré‑processamento de validação.
 
@@ -119,7 +119,7 @@ Comandos rápidos:
 ```bash
 cd src
 
-# Usando defaults (Coruja ../models/tanh.pt e YOLOv8n como referência)
+# Usando defaults (Coruja ../models/best_model.pt e YOLOv8n como referência)
 python3 avaliar_redes.py
 
 # Várias referências YOLO e múltiplas saídas de ROC
@@ -148,14 +148,14 @@ Saídas:
 
 ## Alterar a arquitetura do modelo
 
-Edite `models.py`:
-- Classe `CorujaResNet`: por padrão usa `torchvision.models.resnet50` com pesos ImageNet e ativa `tanh` na saída (1 logit → binário).
+- Edite `models.py`:
+- Classe `CorujaResNet`: por padrão usa `torchvision.models.resnet50` com pesos ImageNet e ativa `sigmoid` na saída (3 logits → 3 probabilidades para multi-label).
 - Parâmetro `unfreeze_head`: permite fine‑tune das camadas `layer4` e `fc`.
 - `transforms_map`: ajuste augmentations, `Resize/Crop`, normalização, etc.
 
 Exemplos de alterações:
 - Trocar backbone: substituir `models.resnet50(...)` por `models.resnet18(...)` (ou outro modelo suportado).
-- Aumentar capacidade: alterar `self.base.fc = nn.Linear(num_ftrs, 1)` para mais camadas (lembre de manter `tanh` se a loss continuar sendo `MSELoss` com alvos em `{−1,1}`).
+- Aumentar capacidade: alterar `self.base.fc = nn.Linear(num_ftrs, 3)` para mais camadas; lembre-se de manter consistência entre a ativação de saída e a loss (ex.: `sigmoid` + `BCELoss` ou sem `sigmoid` + `BCEWithLogitsLoss`).
 
 ## Dicas e solução de problemas
 - Sem GPU? Use `--device cpu` na avaliação; o treino detecta automaticamente (`cuda` se disponível).

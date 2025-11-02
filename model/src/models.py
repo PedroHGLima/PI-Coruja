@@ -3,16 +3,48 @@ import torch.nn as nn
 from torchvision import models
 from torchvision import transforms
 
+# humanos, animais, veículos
+classes = {
+    (0): 'humanos',
+    (1, 2, 3) : 'veiculos',
+    (15, 16): 'animais'
+}
+
 class CorujaResNet(nn.Module):
+    """
+    ResNet50 para classificação multi-label de 3 classes.
+    
+    Saída: Tensor de shape [batch_size, 3] com valores em [0, 1] (sigmoid)
+    - Índice 0: human (pessoa)
+    - Índice 1: animal (gato, cachorro)
+    - Índice 2: vehicle (carro, moto, ônibus)
+    """
     def __init__(self, unfreeze_head: bool = False):
         super().__init__()
         self.base = models.resnet50(weights='IMAGENET1K_V1')
         for param in self.base.parameters():
-            param.requires_grad = unfreeze_head
+            param.requires_grad = False
+        if unfreeze_head:
+            for param in self.base.layer4.parameters():
+                param.requires_grad = True
+            for param in self.base.layer3.parameters():
+                param.requires_grad = True
+            
         num_ftrs = self.base.fc.in_features
-        self.base.fc = nn.Linear(num_ftrs, 1)
+        # 3 neurônios de saída para multi-label
+        self.base.fc = nn.Linear(num_ftrs, 3)
+        
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.tanh(self.base(x))
+        """
+        Forward pass.
+        
+        Args:
+            x: Tensor de entrada [batch_size, 3, H, W]
+        
+        Returns:
+            Tensor [batch_size, 3] com valores em [0, 1] (sigmoid)
+        """
+        return torch.sigmoid(self.base(x))
    
 transforms_map = {
     'train': transforms.Compose([

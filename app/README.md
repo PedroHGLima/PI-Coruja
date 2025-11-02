@@ -29,8 +29,8 @@ app/
 **Parâmetros do modelo:**
 - Tamanho de entrada: 512x512
 - Normalização: ImageNet (mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-- Saída: tanh (-1 a +1)
-- Limiar padrão: 0.0
+- Saída: sigmoid (0 a 1)
+- Limiar padrão: 0.5
 
 ---
 
@@ -76,7 +76,7 @@ app/
 **Controles disponíveis:**
 - **Duração do Batch:** 5-30 segundos (padrão: 10s)
 - **Frames para Análise:** 5-30 frames (padrão: 10)
-- **Limiar de Decisão:** -1.0 a +1.0 (padrão: 0.0)
+- **Limiar de Decisão:** 0.0 a 1.0 (padrão: 0.5)
 - **Botões:** Iniciar/Parar Gravação, Sair
 
 **Thread-safety:**
@@ -101,7 +101,7 @@ MODELO_ONNX = "../model/models/v61.onnx"
 PASTA_GRAVACOES = "CorujaRecordings"
 DEFAULT_DURACAO_BATCH = 10.0
 DEFAULT_BATCH_SIZE = 10
-DEFAULT_LIMIAR = 0.0
+DEFAULT_LIMIAR = 0.5  # para modelos com saída sigmoid
 FPS_GRAVACAO = 30
 ```
 
