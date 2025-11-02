@@ -1,6 +1,6 @@
 services:
   model:
-    image: sha256:1918def8eca13f307d8d9fd60df54574a24909466893fe631afd616bd05635b9
+    image: pgraveli/coruja:ngc
     container_name: coruja_model
     stdin_open: true
     tty: true
@@ -8,13 +8,13 @@ services:
     ipc: host
     ulimits:
       memlock: -1
-      stack: 134217728    # 128 MiB (aumentado se necessário)
-      nofile: 65536       # descritores abertos
+      stack: 134217728
+      nofile: 65536
     volumes:
       - ./:/app
-    working_dir: /app
-    user: "${UID}:${GID}"
+    working_dir: /app/src 
+    user: "${DOCKER_UID}:${DOCKER_GID}" 
+    
     environment:
       - PYTHONUNBUFFERED=1
       - NVIDIA_VISIBLE_DEVICES=all
-    entrypoint: ["bash"]
