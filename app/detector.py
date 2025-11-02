@@ -4,8 +4,8 @@ Módulo de detecção - Carregamento do modelo e inferência
 import cv2
 import numpy as np
 import os
-import requests  # Adicionado para downloads
-from tqdm import tqdm  # Adicionado para barra de progresso
+import requests
+from tqdm import tqdm
 
 DOWNLOAD_URL = "https://drive.google.com/uc?export=download&id=1f6rv0E3_3wSQs04ZWfWNrV1fT1iDP_Vb"
 
