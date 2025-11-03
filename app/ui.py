@@ -31,6 +31,9 @@ class CorujaApp:
         # Estado
         self.gravando = False
         self.current_image_ref = None
+        self.ultima_deteccao = "Aguardando..."
+        self.ultima_confianca = 0.0
+        self.progresso_batch = 0.0
         
         # Configurar UI
         self._criar_interface()
@@ -47,23 +50,56 @@ class CorujaApp:
         main_frame = ttk.Frame(self.root, padding="10")
         main_frame.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
         
+        # Frame esquerdo - Vídeo
+        video_frame = ttk.Frame(main_frame)
+        video_frame.grid(row=0, column=0, sticky=tk.N + tk.S + tk.W, padx=(0, 10))
+        
         # Canvas para vídeo
-        self.canvas = tk.Canvas(main_frame, width=640, height=480, bg='black')
-        self.canvas.grid(row=0, column=0, columnspan=2, pady=10)
+        self.canvas = tk.Canvas(video_frame, width=640, height=480, bg='black')
+        self.canvas.pack(pady=5)
         
         # Label de status
-        self.status_label = ttk.Label(main_frame, text="Status: Aguardando...", 
+        self.status_label = ttk.Label(video_frame, text="Status: Aguardando...", 
                                       font=('Arial', 10))
-        self.status_label.grid(row=1, column=0, columnspan=2, pady=5)
+        self.status_label.pack(pady=5)
+        
+        # Frame direito - Controles e informações
+        right_frame = ttk.Frame(main_frame)
+        right_frame.grid(row=0, column=1, sticky=tk.N + tk.S + tk.E + tk.W)
+        
+        # Frame de última detecção
+        detection_frame = ttk.LabelFrame(right_frame, text="Última Detecção", padding="10")
+        detection_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.detection_label = ttk.Label(detection_frame, text="Aguardando...", 
+                                        font=('Arial', 12, 'bold'),
+                                        foreground='gray')
+        self.detection_label.pack(pady=5)
+        
+        self.confidence_label = ttk.Label(detection_frame, text="Confiança: 0.0%", 
+                                         font=('Arial', 10))
+        self.confidence_label.pack(pady=5)
+        
+        # Frame de progresso do batch
+        progress_frame = ttk.LabelFrame(right_frame, text="Progresso do Batch", padding="10")
+        progress_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.progress_bar = ttk.Progressbar(progress_frame, mode='determinate', 
+                                           length=300, maximum=100)
+        self.progress_bar.pack(pady=5)
+        
+        self.progress_label = ttk.Label(progress_frame, text="0.0s / 10.0s (0%)", 
+                                       font=('Arial', 9))
+        self.progress_label.pack(pady=2)
         
         # Frame de controles
-        controls_frame = ttk.LabelFrame(main_frame, text="Parâmetros", padding="10")
-        controls_frame.grid(row=2, column=0, columnspan=2, pady=10, sticky=tk.W + tk.E)
+        controls_frame = ttk.LabelFrame(right_frame, text="Parâmetros", padding="10")
+        controls_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
         
         # Duração do batch
         ttk.Label(controls_frame, text="Duração do Batch (s):").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.duracao_var = tk.DoubleVar(value=10.0)
-        self.duracao_slider = ttk.Scale(controls_frame, from_=5.0, to=30.0, 
+        self.duracao_slider = ttk.Scale(controls_frame, from_=1.0, to=30.0, 
                                         variable=self.duracao_var, orient=tk.HORIZONTAL,
                                         command=self._atualizar_duracao)
         self.duracao_slider.grid(row=0, column=1, sticky=tk.W + tk.E, padx=5)
@@ -105,8 +141,8 @@ class CorujaApp:
         controls_frame.columnconfigure(1, weight=1)
         
         # Botões de controle
-        button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=3, column=0, columnspan=2, pady=10)
+        button_frame = ttk.Frame(right_frame)
+        button_frame.pack(pady=10)
         
         self.btn_iniciar = ttk.Button(button_frame, text="Iniciar Gravação", 
                                        command=self._toggle_gravacao)
@@ -117,26 +153,35 @@ class CorujaApp:
         # Configurar grid
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
-        main_frame.columnconfigure(0, weight=1)
+        main_frame.columnconfigure(1, weight=1)
+        main_frame.rowconfigure(0, weight=1)
     
-    def _processar_frame_capturado(self, frame, status):
+    def _processar_frame_capturado(self, frame, status, resultado_deteccao=None, progresso_batch=None):
         """Callback chamado pelo gerenciador quando há novo frame"""
+        # Verificar se a UI ainda está ativa
+        if not self.root or not self.root.winfo_exists():
+            return
+            
         # Adicionar à queue (descartar se cheia para evitar acúmulo)
         try:
-            self.ui_frame_queue.put_nowait((frame, status))
+            self.ui_frame_queue.put_nowait((frame, status, resultado_deteccao, progresso_batch))
         except queue.Full:
             # Descartar frames antigos
             try:
                 self.ui_frame_queue.get_nowait()
-                self.ui_frame_queue.put_nowait((frame, status))
+                self.ui_frame_queue.put_nowait((frame, status, resultado_deteccao, progresso_batch))
             except:
                 pass
     
     def _processar_frames_ui(self):
         """Processa frames da queue e atualiza UI (roda no thread principal)"""
+        # Verificar se a janela ainda existe
+        if not self.root.winfo_exists():
+            return
+            
         try:
             while not self.ui_frame_queue.empty():
-                frame, status = self.ui_frame_queue.get_nowait()
+                frame, status, resultado_deteccao, progresso_batch = self.ui_frame_queue.get_nowait()
                 
                 # Converter BGR para RGB
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -158,13 +203,47 @@ class CorujaApp:
                 
                 # Atualizar status
                 self.status_label.config(text=f"Status: {status}")
+                
+                # Atualizar informações de detecção se disponíveis
+                if resultado_deteccao is not None:
+                    deteccao, confianca = resultado_deteccao
+                    if deteccao:
+                        self.detection_label.config(text="HUMANO DETECTADO", 
+                                                   foreground='green')
+                        # Converter confiança para porcentagem (valores entre -1 e 1, normalizar para 0-100%)
+                        conf_percentual = ((confianca + 1) / 2) * 100
+                        self.confidence_label.config(text=f"Confiança: {conf_percentual:.1f}%")
+                    else:
+                        self.detection_label.config(text="Nenhum humano", 
+                                                   foreground='orange')
+                        # Para não detecção, mostrar 0% ou valor baixo
+                        if confianca > 0:
+                            conf_percentual = ((confianca + 1) / 2) * 100
+                            self.confidence_label.config(text=f"Confiança: {conf_percentual:.1f}%")
+                        else:
+                            self.confidence_label.config(text=f"Confiança: 0.0%")
+                
+                # Atualizar barra de progresso se disponível
+                if progresso_batch is not None:
+                    tempo_decorrido, duracao_total = progresso_batch
+                    percentual = (tempo_decorrido / duracao_total * 100) if duracao_total > 0 else 0
+                    percentual = min(100, max(0, percentual))  # Limitar entre 0 e 100
+                    
+                    self.progress_bar['value'] = percentual
+                    self.progress_label.config(
+                        text=f"{tempo_decorrido:.1f}s / {duracao_total:.1f}s ({percentual:.0f}%)"
+                    )
         except queue.Empty:
             pass
         except Exception as e:
             print(f"Erro ao processar frame na UI: {e}")
         
-        # Reagendar
-        self.root.after(33, self._processar_frames_ui)  # ~30 FPS
+        # Reagendar apenas se a janela ainda existe
+        try:
+            if self.root and self.root.winfo_exists():
+                self.root.after(33, self._processar_frames_ui)  # ~30 FPS
+        except:
+            pass
     
     def _atualizar_duracao(self, valor):
         """Callback para atualizar duração do batch (via slider)"""
@@ -178,8 +257,8 @@ class CorujaApp:
         try:
             valor = float(self.duracao_entry.get())
             # Validar limites
-            if valor < 5.0:
-                valor = 5.0
+            if valor < 1.0:
+                valor = 1.0
             elif valor > 30.0:
                 valor = 30.0
             

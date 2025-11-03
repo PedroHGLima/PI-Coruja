@@ -48,6 +48,15 @@ class GerenciadorBatches:
         self.status_atual = "Iniciando..."
         self.status_lock = threading.Lock()
         
+        # Informações da última detecção (para UI)
+        self.ultima_deteccao = None
+        self.ultima_confianca = 0.0
+        self.deteccao_lock = threading.Lock()
+        
+        # Progresso do batch atual (para UI)
+        self.batch_inicio = time.time()
+        self.progresso_lock = threading.Lock()
+        
         # --- Filas Thread-Safe ---
         # Thread 1 (Captura) -> Thread 2 (Processamento)
         self.fila_processamento = queue.Queue(maxsize=300)
@@ -72,7 +81,29 @@ class GerenciadorBatches:
     
     def iniciar(self):
         """Inicia as 3 threads de operação"""
+        # Se já estiver rodando, não reinicia
+        if self.running:
+            print("Gerenciador já está rodando.")
+            return
+            
         self.running = True
+        
+        # Limpar filas para evitar sinais de parada antigos
+        while not self.fila_processamento.empty():
+            try:
+                self.fila_processamento.get_nowait()
+            except queue.Empty:
+                break
+        
+        while not self.fila_gravacao.empty():
+            try:
+                self.fila_gravacao.get_nowait()
+            except queue.Empty:
+                break
+        
+        # Resetar estado de gravação
+        self.gravacao_ativa = False
+        self.batches_sem_deteccao_pos = 0
         
         # Thread 1: Apenas captura e distribui
         self.capture_thread = threading.Thread(target=self._loop_captura, daemon=True)
@@ -98,8 +129,15 @@ class GerenciadorBatches:
         
         # Envia sinais de parada (None) para as threads baseadas em filas
         # (A thread de captura para por self.running = False)
-        self.fila_processamento.put(None)
-        self.fila_gravacao.put(None)
+        try:
+            self.fila_processamento.put(None, timeout=1.0)
+        except queue.Full:
+            pass
+        
+        try:
+            self.fila_gravacao.put(None, timeout=1.0)
+        except queue.Full:
+            pass
         
         # Aguardar threads
         if self.capture_thread and self.capture_thread.is_alive():
@@ -153,9 +191,24 @@ class GerenciadorBatches:
             
             # 1. Enviar para UI (sempre)
             if self.frame_callback:
-                with self.status_lock:
-                    status = self.status_atual
-                self.frame_callback(frame, status) # A UI já tem sua própria fila
+                try:
+                    with self.status_lock:
+                        status = self.status_atual
+                    
+                    # Obter informações de detecção
+                    with self.deteccao_lock:
+                        resultado_deteccao = (self.ultima_deteccao, self.ultima_confianca) if self.ultima_deteccao is not None else None
+                    
+                    # Calcular progresso do batch
+                    with self.progresso_lock:
+                        tempo_decorrido = time.time() - self.batch_inicio
+                        # Limitar ao máximo da duração do batch
+                        tempo_decorrido = min(tempo_decorrido, self.duracao_batch)
+                        progresso_batch = (tempo_decorrido, self.duracao_batch)
+                    
+                    self.frame_callback(frame, status, resultado_deteccao, progresso_batch)
+                except Exception as e:
+                    print(f"Erro ao enviar frame para UI: {e}")
             
             # 2. Enviar para processamento (se gravando)
             if self.gravando:
@@ -179,6 +232,10 @@ class GerenciadorBatches:
         batch_frames = []
         batch_start_time = time.time()
         
+        # Sincronizar com o tempo de progresso da UI
+        with self.progresso_lock:
+            self.batch_inicio = batch_start_time
+        
         while True:
             try:
                 # Espera por um frame (ou sinal de parada)
@@ -195,6 +252,9 @@ class GerenciadorBatches:
                     self._processar_deteccao(batch_frames)
                     batch_frames = [] # Limpa batch local
                     batch_start_time = time.time()
+                    # Atualizar tempo de início do batch para a UI
+                    with self.progresso_lock:
+                        self.batch_inicio = batch_start_time
 
             except queue.Empty:
                 # Timeout de 0.5s
@@ -211,6 +271,9 @@ class GerenciadorBatches:
                     self._processar_deteccao(batch_frames)
                     batch_frames = []
                     batch_start_time = time.time()
+                    # Atualizar tempo de início do batch para a UI
+                    with self.progresso_lock:
+                        self.batch_inicio = batch_start_time
                 
                 continue
         
@@ -237,6 +300,11 @@ class GerenciadorBatches:
         
         # --- Fazer inferência ---
         deteccao, confianca, resultados = self.detector.detectar_batch(frames_amostra)
+        
+        # Atualizar informações de detecção para a UI
+        with self.deteccao_lock:
+            self.ultima_deteccao = deteccao
+            self.ultima_confianca = confianca if confianca > 0 else 0.0
         
         # --- Lógica de Gravação (com Post-Roll) ---
         if deteccao:
