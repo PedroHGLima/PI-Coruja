@@ -23,7 +23,6 @@ def main() -> None:
     parser.add_argument("--early-stop-patience", type=int, default=5, help="Número de épocas sem evolução mínima de acurácia para parar (default=5)")
     parser.add_argument("--early-stop-delta", type=float, default=0.001, help="Evolução mínima de acurácia para não parar (default=0.001 = .1%%)")
     parser.add_argument("--start-at", type=int, default=1, help="Fold inicial para começar o treinamento (default=1)")
-    parser.add_argument("--seed", type=int, default=42, help="Seed para reprodutibilidade (default=42)")
     parser.add_argument("--debug", action="store_true", help="Modo debug: treinamento rápido com poucos dados e épocas")
     args = parser.parse_args()
 
